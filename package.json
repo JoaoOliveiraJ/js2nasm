@@ -1,0 +1,26 @@
+{
+  "name": "js2nasm",
+  "version": "1.0.0",
+  "description": "Transpilador JavaScript para NASM x86-64 Windows",
+  "main": "src/index.js",
+  "bin": {
+    "js2nasm": "./bin/js2nasm.js"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.js",
+    "build": "node bin/js2nasm.js",
+    "start": "node bin/js2nasm.js --run",
+    "compile": "node bin/js2nasm.js --no-compile",
+    "emit:ast": "node bin/js2nasm.js --emit-ast",
+    "emit:ir": "node bin/js2nasm.js --emit-ir",
+    "test:multi": "node bin/js2nasm.js tests/new/multi/main.js --no-compile && node bin/js2nasm.js tests/new/multi/main2.js --no-compile",
+    "test:all": "node tests/run-tests.js && npm run test:multi"
+  },
+  "dependencies": {
+    "acorn": "^8.14.0",
+    "acorn-walk": "^8.3.4",
+    "astring": "^1.9.0",
+    "chalk": "^4.1.2",
+    "commander": "^12.1.0"
+  }
+}
