@@ -112,6 +112,10 @@ class IRGenerator {
         return this.visitThrowStatement(node);
       case 'ClassDeclaration':
         return this.visitClassDeclaration(node);
+      case 'ForInStatement':
+        return this.visitForInStatement(node);
+      case 'LabeledStatement':
+        return this.visitLabeledStatement(node);
       case 'BlockStatement':
         for (const stmt of node.body) {
           this.visitStatement(stmt);
@@ -132,9 +136,7 @@ class IRGenerator {
       'YieldExpression': 'Generators (yield) are not supported.',
       'AwaitExpression': 'async/await is not supported.',
       'TaggedTemplateExpression': 'Tagged templates are not supported.',
-      'ForInStatement': 'for...in is not supported. Use for...of with arrays instead.',
       'WithStatement': '`with` is not supported.',
-      'LabeledStatement': 'Labeled statements are not supported.',
       'ImportExpression': 'Dynamic import() is not supported. Use static import declarations.',
       'MetaProperty': 'import.meta is not supported.',
     };

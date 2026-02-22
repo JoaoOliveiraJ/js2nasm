@@ -55,6 +55,7 @@ function visitVariableDeclaration(node) {
       if (exprResult.propTypes) declInfo.propTypes = exprResult.propTypes;
       if (exprResult.elemTypes) declInfo.elemTypes = exprResult.elemTypes;
       if (exprResult.className) declInfo.className = exprResult.className;
+      if (exprResult.funcName) declInfo.qualifiedName = exprResult.funcName;
       this.analyzer.currentScope.declare(rawName, declInfo);
       // Track global variables
       if (!this.inFunction) {
@@ -226,6 +227,32 @@ function visitAssignment(node) {
       this.emit(OP.LOAD_VAR, t, name);
       const result = this.newTemp();
       this.emit(OP.MOD, result, t, rightTemp);
+      this.emit(OP.STORE_VAR, name, result);
+      return { temp: result, type: TYPE_INT };
+    }
+
+    // Bitwise compound assignments: &=, |=, ^=, <<=, >>=, >>>=
+    const bitwiseCompoundMap = {
+      '&=': OP.BIT_AND, '|=': OP.BIT_OR, '^=': OP.BIT_XOR,
+      '<<=': OP.SHL, '>>=': OP.SHR, '>>>=': OP.USHR,
+    };
+    if (bitwiseCompoundMap[node.operator]) {
+      const { temp: rightTemp } = this.visitExpression(node.right);
+      const t = this.newTemp();
+      this.emit(OP.LOAD_VAR, t, name);
+      const result = this.newTemp();
+      this.emit(bitwiseCompoundMap[node.operator], result, t, rightTemp);
+      this.emit(OP.STORE_VAR, name, result);
+      return { temp: result, type: TYPE_INT };
+    }
+
+    // **= (exponentiation assignment)
+    if (node.operator === '**=') {
+      const { temp: rightTemp } = this.visitExpression(node.right);
+      const t = this.newTemp();
+      this.emit(OP.LOAD_VAR, t, name);
+      const result = this.newTemp();
+      this.emit(OP.POW, result, t, rightTemp);
       this.emit(OP.STORE_VAR, name, result);
       return { temp: result, type: TYPE_INT };
     }

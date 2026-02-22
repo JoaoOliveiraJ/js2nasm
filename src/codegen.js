@@ -486,6 +486,9 @@ class CodeGenerator {
       case OP.MOD:
         this.emitMod(ops[0], ops[1], ops[2]);
         break;
+      case OP.POW:
+        this.emitMathPow(ops[0], ops[1], ops[2]);
+        break;
       case OP.NEG:
         this.emitNeg(ops[0], ops[1]);
         break;

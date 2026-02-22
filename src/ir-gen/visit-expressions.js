@@ -33,6 +33,8 @@ function visitExpression(node) {
       return this.visitTemplateLiteral(node);
     case 'ArrowFunctionExpression':
       return this.visitArrowFunction(node);
+    case 'FunctionExpression':
+      return this.visitFunctionExpression(node);
     case 'SequenceExpression':
       return this.visitSequenceExpression(node);
     case 'ChainExpression':
@@ -102,6 +104,46 @@ function visitBinaryExpression(node) {
     return { temp: t, type: TYPE_STRING };
   }
 
+  // String comparison: use strcmp-based comparison
+  if (lt === TYPE_STRING && rt === TYPE_STRING &&
+      ['<', '>', '<=', '>=', '==', '===', '!=', '!=='].includes(node.operator)) {
+    const setInstrMap = {
+      '<': 'setl', '>': 'setg', '<=': 'setle', '>=': 'setge',
+      '==': 'sete', '===': 'sete', '!=': 'setne', '!==': 'setne',
+    };
+    this.emit(OP.STR_CMP, t, setInstrMap[node.operator], left, right);
+    return { temp: t, type: TYPE_BOOL };
+  }
+
+  // "key" in obj → OBJ_HAS_OWN
+  if (node.operator === 'in') {
+    if (lt === TYPE_STRING || (node.left.type === 'Literal' && typeof node.left.value === 'string')) {
+      const keyLabel = this.program.addString(
+        node.left.type === 'Literal' ? node.left.value : '__dynamic'
+      );
+      this.emit(OP.OBJ_HAS_OWN, t, right, keyLabel);
+    } else {
+      this.emit(OP.LOAD_BOOL, t, 0);
+    }
+    return { temp: t, type: TYPE_BOOL };
+  }
+
+  // instanceof — check className from analyzer
+  if (node.operator === 'instanceof') {
+    // Check if left operand has className matching right operand's name
+    if (node.left.type === 'Identifier' && node.right.type === 'Identifier') {
+      const objInfo = this.analyzer.currentScope.lookup(node.left.name);
+      if (objInfo && objInfo.className === node.right.name) {
+        this.emit(OP.LOAD_BOOL, t, 1);
+      } else {
+        this.emit(OP.LOAD_BOOL, t, 0);
+      }
+    } else {
+      this.emit(OP.LOAD_BOOL, t, 0);
+    }
+    return { temp: t, type: TYPE_BOOL };
+  }
+
   const opMap = {
     '+': OP.ADD, '-': OP.SUB, '*': OP.MUL,
     '/': OP.DIV, '%': OP.MOD, '**': OP.POW,
@@ -150,6 +192,28 @@ function visitUnaryExpression(node) {
   if (node.operator === 'void') {
     this.emit(OP.LOAD_UNDEFINED, t);
     return { temp: t, type: TYPE_INT };
+  }
+  if (node.operator === 'delete') {
+    // delete obj.prop
+    if (node.argument.type === 'MemberExpression' && !node.argument.computed) {
+      const { temp: objTemp } = this.visitExpression(node.argument.object);
+      const keyLabel = this.program.addString(node.argument.property.name);
+      this.emit(OP.OBJ_DELETE, objTemp, keyLabel);
+      this.emit(OP.LOAD_BOOL, t, 1);
+      return { temp: t, type: TYPE_BOOL };
+    }
+    // delete obj["key"]
+    if (node.argument.type === 'MemberExpression' && node.argument.computed) {
+      const { temp: objTemp } = this.visitExpression(node.argument.object);
+      if (node.argument.property.type === 'Literal' && typeof node.argument.property.value === 'string') {
+        const keyLabel = this.program.addString(node.argument.property.value);
+        this.emit(OP.OBJ_DELETE, objTemp, keyLabel);
+      }
+      this.emit(OP.LOAD_BOOL, t, 1);
+      return { temp: t, type: TYPE_BOOL };
+    }
+    this.emit(OP.LOAD_BOOL, t, 1);
+    return { temp: t, type: TYPE_BOOL };
   }
 
   throw new Error(`Unsupported unary operator: ${node.operator}`);

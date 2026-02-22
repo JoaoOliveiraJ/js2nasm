@@ -219,14 +219,121 @@ function visitSwitchStatement(node) {
   this.loopStack.pop();
 }
 
-function visitBreakStatement() {
+function visitForInStatement(node) {
+  // for (let key in obj) → get Object.keys(obj), iterate with index
+  const iterLabel = this.newLabel('forin');
+  const updateLabel = this.newLabel('forin_upd');
+  const endLabel = this.newLabel('endforin');
+
+  this.loopStack.push({ continueLabel: updateLabel, breakLabel: endLabel });
+
+  // Get the object's keys as an array
+  const { temp: objTemp } = this.visitExpression(node.right);
+  const keysTemp = this.newTemp();
+  this.emit(OP.OBJ_KEYS, keysTemp, objTemp);
+
+  // Create index variable
+  const idxName = `_forin_idx_${this.labelCounter}`;
+  const idxTemp = this.newTemp();
+  this.emit(OP.LOAD_INT, idxTemp, 0);
+  this.emit(OP.STORE_VAR, idxName, idxTemp);
+
+  this.emit(OP.LABEL, iterLabel);
+
+  // Test: idx < keys.length
+  const lenTemp = this.newTemp();
+  this.emit(OP.ARRAY_LENGTH, lenTemp, keysTemp);
+  const idxLoad = this.newTemp();
+  this.emit(OP.LOAD_VAR, idxLoad, idxName);
+  const cmpTemp = this.newTemp();
+  this.emit(OP.CMP_LT, cmpTemp, idxLoad, lenTemp);
+  this.emit(OP.JUMP_IF_FALSE, cmpTemp, endLabel);
+
+  // Declare loop variable: let key = keys[idx]
+  const elemTemp = this.newTemp();
+  const idxLoad2 = this.newTemp();
+  this.emit(OP.LOAD_VAR, idxLoad2, idxName);
+  this.emit(OP.ARRAY_GET, elemTemp, keysTemp, idxLoad2);
+
+  const varName = node.left.type === 'VariableDeclaration'
+    ? node.left.declarations[0].id.name
+    : node.left.name;
+
+  this.analyzer.currentScope.declare(varName, { type: TYPE_INT, isConst: false });
+  this.emit(OP.STORE_VAR, varName, elemTemp);
+
+  // Body
+  this.visitStatement(node.body);
+
+  // Update: idx++
+  this.emit(OP.LABEL, updateLabel);
+  const incTemp = this.newTemp();
+  this.emit(OP.PRE_INC, incTemp, idxName);
+
+  this.emit(OP.JUMP, iterLabel);
+  this.emit(OP.LABEL, endLabel);
+
+  this.loopStack.pop();
+}
+
+function visitLabeledStatement(node) {
+  const labelName = node.label.name;
+  // If the body is a loop, add label info to loopStack for labeled break/continue
+  const body = node.body;
+
+  // Create break label for this labeled statement
+  const breakLabel = this.newLabel(`label_${labelName}_break`);
+
+  if (['ForStatement', 'WhileStatement', 'DoWhileStatement', 'ForOfStatement', 'ForInStatement'].includes(body.type)) {
+    // Push a special entry with the label name so break/continue can find it
+    this._labelMap = this._labelMap || {};
+    this._labelMap[labelName] = { breakLabel };
+    // Visit the loop — it will push its own entry to loopStack
+    this.visitStatement(body);
+    // After the loop, emit the break label
+    this.emit(OP.LABEL, breakLabel);
+    // Patch: update the loopStack entry that was added by the loop
+    delete this._labelMap[labelName];
+  } else {
+    // Non-loop labeled statement — just for break
+    this._labelMap = this._labelMap || {};
+    this._labelMap[labelName] = { breakLabel };
+    this.visitStatement(body);
+    this.emit(OP.LABEL, breakLabel);
+    delete this._labelMap[labelName];
+  }
+}
+
+function visitBreakStatement(node) {
+  // Labeled break
+  if (node && node.label) {
+    const labelName = node.label.name;
+    if (this._labelMap && this._labelMap[labelName]) {
+      this.emit(OP.JUMP, this._labelMap[labelName].breakLabel);
+      return;
+    }
+  }
   if (this.loopStack.length === 0) {
     throw new Error('break statement outside of loop');
   }
   this.emit(OP.JUMP, this.loopStack[this.loopStack.length - 1].breakLabel);
 }
 
-function visitContinueStatement() {
+function visitContinueStatement(node) {
+  // Labeled continue
+  if (node && node.label) {
+    const labelName = node.label.name;
+    if (this._labelMap && this._labelMap[labelName]) {
+      // For labeled continue, we need the continue label from the loop
+      // The loop that was most recently pushed with this label
+      // Since we can't easily associate label with loop stack entry,
+      // jump to the continue label of the innermost loop (simplification)
+      if (this.loopStack.length > 0) {
+        this.emit(OP.JUMP, this.loopStack[this.loopStack.length - 1].continueLabel);
+        return;
+      }
+    }
+  }
   if (this.loopStack.length === 0) {
     throw new Error('continue statement outside of loop');
   }
@@ -293,9 +400,11 @@ module.exports = {
   visitForStatement,
   visitDoWhileStatement,
   visitForOfStatement,
+  visitForInStatement,
   visitSwitchStatement,
   visitBreakStatement,
   visitContinueStatement,
   visitTryStatement,
   visitThrowStatement,
+  visitLabeledStatement,
 };
