@@ -1,4 +1,4 @@
-// Test new string methods
+// Testa novos métodos de string
 const s = "hello";
 console.log(s.charCodeAt(0));
 
@@ -11,6 +11,6 @@ console.log(padded);
 const padded2 = "hi".padEnd(6, "!");
 console.log(padded2);
 
-// Number methods
+// Métodos Number
 console.log(Number.isInteger(42));
 console.log(Number.isFinite(100));

@@ -1,11 +1,11 @@
-// Test typeof operator
+// Testa operador typeof
 let n = 42;
 let s = "hello";
 let b = true;
 console.log(typeof n);
 console.log(typeof s);
 console.log(typeof b);
-// expected:
+// esperado:
 // number
 // string
 // boolean

@@ -6,11 +6,11 @@ const { TYPE_INT, TYPE_STRING } = require('../types');
 function visitReturnStatement(node) {
   if (node.argument) {
     const { temp, type } = this.visitExpression(node.argument);
-    // Track return type for the current function
+    // Rastreia tipo de retorno para a função atual
     if (this._currentFunctionReturnType === undefined || this._currentFunctionReturnType === TYPE_INT) {
       this._currentFunctionReturnType = type;
     }
-    // Track if returning a parameter directly (for call-site type propagation)
+    // Rastreia se está retornando um parâmetro diretamente (para propagação de tipo no call site)
     if (node.argument.type === 'Identifier' && this._currentFunctionParams) {
       const paramIdx = this._currentFunctionParams.indexOf(node.argument.name);
       if (paramIdx !== -1) {
@@ -65,7 +65,7 @@ function visitForStatement(node) {
 
   this.loopStack.push({ continueLabel: updateLabel, breakLabel: endLabel });
 
-  // Init
+  // Inicialização
   if (node.init) {
     if (node.init.type === 'VariableDeclaration') {
       this.visitVariableDeclaration(node.init);
@@ -74,17 +74,17 @@ function visitForStatement(node) {
     }
   }
 
-  // Test
+  // Teste
   this.emit(OP.LABEL, loopLabel);
   if (node.test) {
     const { temp: cond } = this.visitExpression(node.test);
     this.emit(OP.JUMP_IF_FALSE, cond, endLabel);
   }
 
-  // Body
+  // Corpo
   this.visitStatement(node.body);
 
-  // Update
+  // Atualização
   this.emit(OP.LABEL, updateLabel);
   if (node.update) {
     if (node.update.type === 'UpdateExpression') {
@@ -120,28 +120,28 @@ function visitDoWhileStatement(node) {
 }
 
 function visitForOfStatement(node) {
-  // Desugar for...of into index-based for loop
-  // Supports both arrays and strings
+  // Desaçucara for...of em loop for baseado em índice
+  // Suporta arrays e strings
   const iterLabel = this.newLabel('forof');
   const updateLabel = this.newLabel('forof_upd');
   const endLabel = this.newLabel('endforof');
 
   this.loopStack.push({ continueLabel: updateLabel, breakLabel: endLabel });
 
-  // Get the iterable
+  // Obtém o iterável
   const { temp: iterTemp, type: iterType } = this.visitExpression(node.right);
   const isString = iterType === TYPE_STRING;
 
-  // Create index variable
+  // Cria variável de índice
   const idxName = `_forof_idx_${this.labelCounter}`;
   const idxTemp = this.newTemp();
   this.emit(OP.LOAD_INT, idxTemp, 0);
   this.emit(OP.STORE_VAR, idxName, idxTemp);
 
-  // Loop start
+  // Início do loop
   this.emit(OP.LABEL, iterLabel);
 
-  // Test: idx < iterable.length
+  // Teste: idx < iterável.length
   const lenTemp = this.newTemp();
   if (isString) {
     this.emit(OP.STR_LENGTH, lenTemp, iterTemp);
@@ -154,7 +154,7 @@ function visitForOfStatement(node) {
   this.emit(OP.CMP_LT, cmpTemp, idxLoad, lenTemp);
   this.emit(OP.JUMP_IF_FALSE, cmpTemp, endLabel);
 
-  // Declare loop variable: let x = iterable[idx]
+  // Declara variável do loop: let x = iterable[idx]
   const elemTemp = this.newTemp();
   const idxLoad2 = this.newTemp();
   this.emit(OP.LOAD_VAR, idxLoad2, idxName);
@@ -164,7 +164,7 @@ function visitForOfStatement(node) {
     this.emit(OP.ARRAY_GET, elemTemp, iterTemp, idxLoad2);
   }
 
-  // Handle destructuring in loop variable
+  // Trata destructuring na variável do loop
   const leftDecl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
   if (leftDecl && leftDecl.id.type === 'ArrayPattern') {
     const tempName = `_forof_elem_${this.labelCounter}`;
@@ -182,10 +182,10 @@ function visitForOfStatement(node) {
     this.emit(OP.STORE_VAR, varName, elemTemp);
   }
 
-  // Body
+  // Corpo
   this.visitStatement(node.body);
 
-  // Update: idx++
+  // Atualização: idx++
   this.emit(OP.LABEL, updateLabel);
   const incTemp = this.newTemp();
   this.emit(OP.PRE_INC, incTemp, idxName);
@@ -204,30 +204,30 @@ function visitSwitchStatement(node) {
   const { temp: disc } = this.visitExpression(node.discriminant);
   const caseLabels = [];
 
-  // Generate labels for each case
+  // Gera labels para cada case
   for (let i = 0; i < node.cases.length; i++) {
     caseLabels.push(this.newLabel(`case_${i}`));
   }
 
-  // Generate comparison jumps
+  // Gera jumps de comparação
   for (let i = 0; i < node.cases.length; i++) {
     const c = node.cases[i];
     if (c.test) {
-      // case value:
+      // valor do case:
       const { temp: testVal } = this.visitExpression(c.test);
       const cmpTemp = this.newTemp();
       this.emit(OP.CMP_SEQ, cmpTemp, disc, testVal);
       this.emit(OP.JUMP_IF_TRUE, cmpTemp, caseLabels[i]);
     } else {
-      // default:
+      // padrão (default):
       this.emit(OP.JUMP, caseLabels[i]);
     }
   }
 
-  // If no default matched, jump to end
+  // Se nenhum default casou, pula pro final
   this.emit(OP.JUMP, endLabel);
 
-  // Emit case bodies (fall-through behavior)
+  // Emite corpos dos cases (comportamento fall-through)
   for (let i = 0; i < node.cases.length; i++) {
     this.emit(OP.LABEL, caseLabels[i]);
     for (const stmt of node.cases[i].consequent) {
@@ -240,19 +240,19 @@ function visitSwitchStatement(node) {
 }
 
 function visitForInStatement(node) {
-  // for (let key in obj) → get Object.keys(obj), iterate with index
+  // for (let key in obj) → pega Object.keys(obj), itera com índice
   const iterLabel = this.newLabel('forin');
   const updateLabel = this.newLabel('forin_upd');
   const endLabel = this.newLabel('endforin');
 
   this.loopStack.push({ continueLabel: updateLabel, breakLabel: endLabel });
 
-  // Get the object's keys as an array
+  // Pega as chaves do objeto como array
   const { temp: objTemp } = this.visitExpression(node.right);
   const keysTemp = this.newTemp();
   this.emit(OP.OBJ_KEYS, keysTemp, objTemp);
 
-  // Create index variable
+  // Cria variável de índice
   const idxName = `_forin_idx_${this.labelCounter}`;
   const idxTemp = this.newTemp();
   this.emit(OP.LOAD_INT, idxTemp, 0);
@@ -260,7 +260,7 @@ function visitForInStatement(node) {
 
   this.emit(OP.LABEL, iterLabel);
 
-  // Test: idx < keys.length
+  // Teste: idx < keys.length
   const lenTemp = this.newTemp();
   this.emit(OP.ARRAY_LENGTH, lenTemp, keysTemp);
   const idxLoad = this.newTemp();
@@ -269,7 +269,7 @@ function visitForInStatement(node) {
   this.emit(OP.CMP_LT, cmpTemp, idxLoad, lenTemp);
   this.emit(OP.JUMP_IF_FALSE, cmpTemp, endLabel);
 
-  // Declare loop variable: let key = keys[idx]
+  // Declara variável do loop: let key = keys[idx]
   const elemTemp = this.newTemp();
   const idxLoad2 = this.newTemp();
   this.emit(OP.LOAD_VAR, idxLoad2, idxName);
@@ -282,10 +282,10 @@ function visitForInStatement(node) {
   this.analyzer.currentScope.declare(varName, { type: TYPE_INT, isConst: false });
   this.emit(OP.STORE_VAR, varName, elemTemp);
 
-  // Body
+  // Corpo
   this.visitStatement(node.body);
 
-  // Update: idx++
+  // Atualização: idx++
   this.emit(OP.LABEL, updateLabel);
   const incTemp = this.newTemp();
   this.emit(OP.PRE_INC, incTemp, idxName);
@@ -298,24 +298,24 @@ function visitForInStatement(node) {
 
 function visitLabeledStatement(node) {
   const labelName = node.label.name;
-  // If the body is a loop, add label info to loopStack for labeled break/continue
+  // Se o corpo é um loop, adiciona info de label ao loopStack para break/continue com label
   const body = node.body;
 
-  // Create break label for this labeled statement
+  // Cria label de break para esta declaração com label
   const breakLabel = this.newLabel(`label_${labelName}_break`);
 
   if (['ForStatement', 'WhileStatement', 'DoWhileStatement', 'ForOfStatement', 'ForInStatement'].includes(body.type)) {
-    // Push a special entry with the label name so break/continue can find it
+    // Empilha uma entrada especial com o nome do label para que break/continue possam encontrá-lo
     this._labelMap = this._labelMap || {};
     this._labelMap[labelName] = { breakLabel };
-    // Visit the loop — it will push its own entry to loopStack
+    // Visita o loop — ele vai empilhar sua própria entrada no loopStack
     this.visitStatement(body);
-    // After the loop, emit the break label
+    // Depois do loop, emite o label de break
     this.emit(OP.LABEL, breakLabel);
-    // Patch: update the loopStack entry that was added by the loop
+    // Corrige: atualiza a entrada do loopStack que foi adicionada pelo loop
     delete this._labelMap[labelName];
   } else {
-    // Non-loop labeled statement — just for break
+    // Declaração com label sem loop — apenas para break
     this._labelMap = this._labelMap || {};
     this._labelMap[labelName] = { breakLabel };
     this.visitStatement(body);
@@ -325,7 +325,7 @@ function visitLabeledStatement(node) {
 }
 
 function visitBreakStatement(node) {
-  // Labeled break
+  // Break com label
   if (node && node.label) {
     const labelName = node.label.name;
     if (this._labelMap && this._labelMap[labelName]) {
@@ -340,14 +340,14 @@ function visitBreakStatement(node) {
 }
 
 function visitContinueStatement(node) {
-  // Labeled continue
+  // Continue com label
   if (node && node.label) {
     const labelName = node.label.name;
     if (this._labelMap && this._labelMap[labelName]) {
-      // For labeled continue, we need the continue label from the loop
-      // The loop that was most recently pushed with this label
-      // Since we can't easily associate label with loop stack entry,
-      // jump to the continue label of the innermost loop (simplification)
+      // Para continue com label, precisamos do label de continue do loop
+      // O loop que foi empilhado mais recentemente com este label
+      // Como não podemos facilmente associar label com entrada do loop stack,
+      // pula para o label de continue do loop mais interno (simplificação)
       if (this.loopStack.length > 0) {
         this.emit(OP.JUMP, this.loopStack[this.loopStack.length - 1].continueLabel);
         return;
@@ -365,27 +365,27 @@ function visitTryStatement(node) {
   const finallyLabel = node.finalizer ? this.newLabel('finally') : null;
   const endLabel = this.newLabel('endtry');
 
-  // Push exception handler
+  // Empilha handler de exceção
   this.emit(OP.TRY_PUSH, catchLabel);
 
-  // Try body
+  // Corpo do try
   for (const stmt of node.block.body) {
     this.visitStatement(stmt);
   }
 
-  // Normal path — pop handler
+  // Caminho normal — desempilha handler
   this.emit(OP.TRY_POP);
   this.emit(OP.JUMP, finallyLabel || endLabel);
 
-  // Catch block
+  // Bloco catch
   this.emit(OP.LABEL, catchLabel);
   if (node.handler) {
-    // Declare catch parameter and load exception value
+    // Declara parâmetro do catch e carrega valor da exceção
     if (node.handler.param) {
       const paramName = node.handler.param.name;
       this.analyzer.currentScope.declare(paramName, { type: TYPE_INT, isConst: false });
-      // The exception value is stored in _exc_value BSS by THROW;
-      // Register as global so codegen resolves to gvar__exc_value
+      // O valor da exceção é armazenado em _exc_value BSS pelo THROW;
+      // Registra como global para que o codegen resolva para gvar__exc_value
       this.program.globals.add('_exc_value');
       const excTemp = this.newTemp();
       this.emit(OP.LOAD_VAR, excTemp, '_exc_value');
@@ -397,7 +397,7 @@ function visitTryStatement(node) {
   }
   this.emit(OP.JUMP, finallyLabel || endLabel);
 
-  // Finally block
+  // Bloco finally
   if (node.finalizer) {
     this.emit(OP.LABEL, finallyLabel);
     for (const stmt of node.finalizer.body) {

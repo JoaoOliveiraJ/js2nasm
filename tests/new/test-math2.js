@@ -1,4 +1,4 @@
-// Test new Math methods
+// Testa novos métodos Math
 console.log(Math.sign(42));
 console.log(Math.sign(-7));
 console.log(Math.sign(0));

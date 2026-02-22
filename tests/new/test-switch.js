@@ -1,4 +1,4 @@
-// Test switch statement
+// Testa instrução switch
 let val = 2;
 switch (val) {
   case 1:
@@ -14,4 +14,4 @@ switch (val) {
     console.log(0);
     break;
 }
-// expected: 20
+// esperado: 20

@@ -10,10 +10,10 @@ const { CodeGenerator } = require('./codegen');
 const { ModuleResolver } = require('./module-resolver');
 
 /**
- * Transpile a single JS source string (backward-compatible, no module support).
+ * Transpila uma única string de código JS (retrocompatível, sem suporte a módulos).
  */
 function transpile(source, options = {}) {
-  // 1. Parse JS → AST using acorn
+  // 1. Parseia JS → AST usando acorn
   const ast = acorn.parse(source, {
     ecmaVersion: 2022,
     sourceType: 'script',
@@ -24,7 +24,7 @@ function transpile(source, options = {}) {
     return { ast, astString: JSON.stringify(ast, null, 2) };
   }
 
-  // 2. Generate IR from AST
+  // 2. Gera IR a partir do AST
   const irGen = new IRGenerator();
   const ir = irGen.generate(ast);
 
@@ -32,7 +32,7 @@ function transpile(source, options = {}) {
     return { ir, irString: formatIR(ir) };
   }
 
-  // 3. Generate NASM from IR
+  // 3. Gera NASM a partir do IR
   const codegen = new CodeGenerator(ir);
   const asm = codegen.generate();
 
@@ -40,19 +40,19 @@ function transpile(source, options = {}) {
 }
 
 /**
- * Transpile a project starting from an entry file.
- * Resolves ES module imports recursively and merges into a single IR.
- * Falls back to single-file transpile() if no module syntax detected.
+ * Transpila um projeto a partir de um arquivo de entrada.
+ * Resolve importações de módulos ES recursivamente e mescla em um único IR.
+ * Volta para transpile() de arquivo único se nenhuma sintaxe de módulo for detectada.
  */
 function transpileProject(entryPath, options = {}) {
   const absEntry = path.resolve(entryPath);
   const source = fs.readFileSync(absEntry, 'utf-8');
 
-  // Try to resolve modules
+  // Tenta resolver módulos
   const resolver = new ModuleResolver();
   const resolved = resolver.resolve(absEntry);
 
-  // No module syntax — fall back to single-file transpile
+  // Sem sintaxe de módulo — volta para transpile de arquivo único
   if (!resolved) {
     return transpile(source, options);
   }
@@ -60,12 +60,12 @@ function transpileProject(entryPath, options = {}) {
   const { modules, order } = resolved;
 
   if (options.emitAst) {
-    // Show AST for entry module only
+    // Mostra AST apenas para o módulo de entrada
     const entryInfo = modules.get(absEntry);
     return { ast: entryInfo.ast, astString: JSON.stringify(entryInfo.ast, null, 2) };
   }
 
-  // Generate IR per module in topological order
+  // Gera IR por módulo em ordem topológica
   const moduleIRs = [];
   for (const absPath of order) {
     const modInfo = modules.get(absPath);
@@ -74,14 +74,14 @@ function transpileProject(entryPath, options = {}) {
     moduleIRs.push({ moduleInfo: modInfo, ir });
   }
 
-  // Merge all IRs
+  // Mescla todos os IRs
   const mergedIR = mergeIRPrograms(moduleIRs);
 
   if (options.emitIr) {
     return { ir: mergedIR, irString: formatIR(mergedIR) };
   }
 
-  // Generate NASM from merged IR
+  // Gera NASM a partir do IR mesclado
   const codegen = new CodeGenerator(mergedIR);
   const asm = codegen.generate();
 
@@ -89,34 +89,34 @@ function transpileProject(entryPath, options = {}) {
 }
 
 /**
- * Merge multiple module IRs into a single IRProgram.
- * Order is topological (dependencies first, entry last).
+ * Mescla múltiplos IRs de módulos em um único IRProgram.
+ * A ordem é topológica (dependências primeiro, entrada por último).
  */
 function mergeIRPrograms(moduleIRs) {
   const merged = new IRProgram();
 
   for (const { ir } of moduleIRs) {
-    // Merge functions
+    // Mescla funções
     for (const func of ir.functions) {
       merged.functions.push(func);
     }
 
-    // Merge main (top-level code) in topological order
+    // Mescla main (código de nível superior) em ordem topológica
     for (const inst of ir.main) {
       merged.main.push(inst);
     }
 
-    // Merge strings (deduplicate by value)
+    // Mescla strings (deduplicando por valor)
     for (const s of ir.strings) {
       const existing = merged.strings.find(ms => ms.value === s.value);
       if (!existing) {
         merged.strings.push({ label: s.label, value: s.value });
       }
-      // Note: labels stay as emitted by each module's IRGenerator.
-      // Since each module has its own string counter, labels won't collide.
+      // Nota: os labels permanecem como emitidos pelo IRGenerator de cada módulo.
+      // Como cada módulo tem seu próprio contador de strings, os labels não colidem.
     }
 
-    // Merge floats (deduplicate by value)
+    // Mescla floats (deduplicando por valor)
     for (const f of ir.floats) {
       const existing = merged.floats.find(mf => mf.value === f.value);
       if (!existing) {
@@ -124,7 +124,7 @@ function mergeIRPrograms(moduleIRs) {
       }
     }
 
-    // Merge globals
+    // Mescla globais
     for (const g of ir.globals) {
       merged.globals.add(g);
     }
@@ -136,7 +136,7 @@ function mergeIRPrograms(moduleIRs) {
 function formatIR(ir) {
   const lines = [];
 
-  // Functions
+  // Funções
   for (const func of ir.functions) {
     lines.push(`function ${func.name}(${func.params.join(', ')}):`);
     for (const inst of func.body) {
@@ -145,13 +145,13 @@ function formatIR(ir) {
     lines.push('');
   }
 
-  // Main
+  // Principal
   lines.push('main:');
   for (const inst of ir.main) {
     lines.push(`  ${inst.toString()}`);
   }
 
-  // Data
+  // Dados
   if (ir.strings.length > 0) {
     lines.push('\nstrings:');
     for (const s of ir.strings) {

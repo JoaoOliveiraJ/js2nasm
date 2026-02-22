@@ -1,4 +1,4 @@
-// Test for...in loop
+// Testa loop for...in
 const obj = { a: 1, b: 2, c: 3 };
 
 let sum = 0;

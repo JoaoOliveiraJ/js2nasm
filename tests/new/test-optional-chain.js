@@ -1,4 +1,4 @@
-// expected: 42\n0
+// esperado: 42\n0
 let obj = { x: 42 };
 console.log(obj?.x);
 

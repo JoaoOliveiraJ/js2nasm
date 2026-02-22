@@ -1,4 +1,4 @@
-// Test compound assignment to member expressions
+// Testa atribuição composta de expressões de membro
 const obj = { x: 10, y: 20 };
 obj.x += 5;
 obj.y *= 2;

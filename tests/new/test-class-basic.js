@@ -1,4 +1,4 @@
-// expected: 10\n20\n200
+// esperado: 10\n20\n200
 class Point {
   constructor(x, y) {
     this.x = x;

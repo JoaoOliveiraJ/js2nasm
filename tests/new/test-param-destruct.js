@@ -1,4 +1,4 @@
-// Test parameter destructuring
+// Testa destructuring de parâmetros
 function add({ x, y }) {
   return x + y;
 }
@@ -6,13 +6,13 @@ function add({ x, y }) {
 const point = { x: 10, y: 20 };
 console.log(add(point));
 
-// Array destructuring in params
+// Destructuring de array em parâmetros
 function sum([a, b, c]) {
   return a + b + c;
 }
 
 console.log(sum([10, 20, 30]));
 
-// Arrow with destructuring
+// Arrow com destructuring
 const getX = ({ x }) => x;
 console.log(getX({ x: 42 }));

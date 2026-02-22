@@ -1,4 +1,4 @@
-// expected: 21
+// esperado: 21
 function sum6(a, b, c, d, e, f) {
   return a + b + c + d + e + f;
 }

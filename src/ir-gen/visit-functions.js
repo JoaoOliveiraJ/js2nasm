@@ -7,7 +7,7 @@ function visitFunctionDeclaration(node) {
   const rawName = node.id.name;
   const qualifiedName = (!this.inFunction && this.moduleId) ? this.qualifyName(rawName) : rawName;
 
-  // Separate rest param from regular params
+  // Separa rest param dos parâmetros regulares
   let restParam = null;
   const regularParams = [];
   for (const p of node.params) {
@@ -23,18 +23,18 @@ function visitFunctionDeclaration(node) {
     if (p.type === 'ObjectPattern' || p.type === 'ArrayPattern') return `_dparam_${i}`;
     return p.name;
   });
-  // Include rest param name in the formal params list for stack allocation
+  // Inclui nome do rest param na lista de parâmetros formais para alocação de stack
   const allParamNames = restParam ? [...params, restParam] : params;
 
-  // Register in analyzer scope with qualified name
+  // Registra no escopo do analyzer com nome qualificado
   this.analyzer.currentScope.declare(rawName, { type: TYPE_FUNCTION, isConst: true, qualifiedName });
 
   const func = new IRFunction(qualifiedName, allParamNames);
-  // Store metadata about rest param
+  // Armazena metadata sobre rest param
   func.restParamIndex = restParam ? regularParams.length : -1;
   this.program.functions.push(func);
 
-  // Save state
+  // Salva estado
   const prevInstructions = this.currentInstructions;
   const prevScope = this.analyzer.currentScope;
   const prevInFunction = this.inFunction;
@@ -49,7 +49,7 @@ function visitFunctionDeclaration(node) {
   this._currentFunctionParams = params;
   this.analyzer.enterScope();
 
-  // Declare regular params (with default values and destructuring support)
+  // Declara parâmetros regulares (com valores default e suporte a destructuring)
   for (let i = 0; i < regularParams.length; i++) {
     const p = regularParams[i];
     if (p.type === 'ObjectPattern') {
@@ -76,24 +76,24 @@ function visitFunctionDeclaration(node) {
     }
   }
 
-  // Rest param: declare as empty array (populated at call site is not yet supported)
+  // Rest param: declara como array vazio (preenchimento no call site ainda não suportado)
   if (restParam) {
     this.analyzer.currentScope.declare(restParam, { type: TYPE_ARRAY, isConst: false });
-    // Create an empty array for rest param
+    // Cria um array vazio para rest param
     const emptyArr = this.newTemp();
     this.emit(OP.ARRAY_NEW, emptyArr, []);
     this.emit(OP.STORE_VAR, restParam, emptyArr);
   }
 
-  // Visit body
+  // Visita corpo
   for (const stmt of node.body.body) {
     this.visitStatement(stmt);
   }
 
-  // Collect locals (all variables declared in function scope)
+  // Coleta locais (todas as variáveis declaradas no escopo da função)
   func.locals = [...this.analyzer.currentScope.variables.keys()];
 
-  // Store return type info for this function
+  // Armazena info de tipo de retorno para esta função
   if (!this._functionReturnTypes) this._functionReturnTypes = {};
   this._functionReturnTypes[qualifiedName] = this._currentFunctionReturnType;
   if (!this._functionReturnParams) this._functionReturnParams = {};
@@ -101,7 +101,7 @@ function visitFunctionDeclaration(node) {
     this._functionReturnParams[qualifiedName] = this._currentFunctionReturnParam;
   }
 
-  // Restore state
+  // Restaura estado
   this.analyzer.exitScope();
   this.currentInstructions = prevInstructions;
   this.inFunction = prevInFunction;
@@ -111,7 +111,7 @@ function visitFunctionDeclaration(node) {
 }
 
 function visitArrowFunction(node) {
-  // Treat arrow functions like anonymous function declarations
+  // Trata arrow functions como declarações de função anônima
   const rawName = `_arrow_${this.labelCounter++}`;
   const name = this.moduleId ? this.qualifyName(rawName) : rawName;
 
@@ -149,7 +149,7 @@ function visitArrowFunction(node) {
   this._currentFunctionParams = params;
   this.analyzer.enterScope();
 
-  // Declare regular params (with default values and destructuring)
+  // Declara parâmetros regulares (com valores default e destructuring)
   for (let i = 0; i < regularParams.length; i++) {
     const p = regularParams[i];
     if (p.type === 'ObjectPattern') {
@@ -183,16 +183,16 @@ function visitArrowFunction(node) {
     this.emit(OP.STORE_VAR, restParam, emptyArr);
   }
 
-  // Body
+  // Corpo
   if (node.body.type === 'BlockStatement') {
     for (const stmt of node.body.body) {
       this.visitStatement(stmt);
     }
   } else {
-    // Concise body — expression auto-returned
+    // Corpo conciso — expressão retornada automaticamente
     const { temp, type } = this.visitExpression(node.body);
     this._currentFunctionReturnType = type;
-    // Track if returning a param
+    // Rastreia se está retornando um parâmetro
     if (node.body.type === 'Identifier') {
       const paramIdx = params.indexOf(node.body.name);
       if (paramIdx !== -1) this._currentFunctionReturnParam = paramIdx;
@@ -202,7 +202,7 @@ function visitArrowFunction(node) {
 
   func.locals = [...this.analyzer.currentScope.variables.keys()];
 
-  // Store return type info for this function
+  // Armazena info de tipo de retorno para esta função
   if (!this._functionReturnTypes) this._functionReturnTypes = {};
   this._functionReturnTypes[name] = this._currentFunctionReturnType;
   if (!this._functionReturnParams) this._functionReturnParams = {};
@@ -217,7 +217,7 @@ function visitArrowFunction(node) {
   this._currentFunctionReturnParam = prevReturnParam;
   this._currentFunctionParams = prevFunctionParams;
 
-  // Return the function name as a reference
+  // Retorna o nome da função como referência
   const t = this.newTemp();
   const label = this.program.addString(name);
   this.emit(OP.LOAD_STRING, t, label);
@@ -225,7 +225,7 @@ function visitArrowFunction(node) {
 }
 
 function visitFunctionExpression(node) {
-  // Treat function expressions like anonymous/named function declarations
+  // Trata expressões de função como declarações de função anônima/nomeada
   const rawName = node.id ? node.id.name : `_func_expr_${this.labelCounter++}`;
   const name = this.moduleId ? this.qualifyName(rawName) : rawName;
 
@@ -263,12 +263,12 @@ function visitFunctionExpression(node) {
   this._currentFunctionParams = params;
   this.analyzer.enterScope();
 
-  // If named, declare the name inside the function's own scope (for recursion)
+  // Se nomeada, declara o nome dentro do próprio escopo da função (para recursão)
   if (node.id) {
     this.analyzer.currentScope.declare(rawName, { type: TYPE_FUNCTION, isConst: true });
   }
 
-  // Declare regular params (with default values and destructuring)
+  // Declara parâmetros regulares (com valores default e destructuring)
   for (let i = 0; i < regularParams.length; i++) {
     const p = regularParams[i];
     if (p.type === 'ObjectPattern') {
@@ -302,7 +302,7 @@ function visitFunctionExpression(node) {
     this.emit(OP.STORE_VAR, restParam, emptyArr);
   }
 
-  // Body (always BlockStatement for function expressions)
+  // Corpo (sempre BlockStatement para expressões de função)
   for (const stmt of node.body.body) {
     this.visitStatement(stmt);
   }
@@ -323,7 +323,7 @@ function visitFunctionExpression(node) {
   this._currentFunctionReturnParam = prevReturnParam;
   this._currentFunctionParams = prevFunctionParams;
 
-  // Return the function name as a reference
+  // Retorna o nome da função como referência
   const t = this.newTemp();
   const label = this.program.addString(name);
   this.emit(OP.LOAD_STRING, t, label);
@@ -331,14 +331,14 @@ function visitFunctionExpression(node) {
 }
 
 function visitCallExpression(node) {
-  // console.log/error handled in visitExpressionStatement when standalone
-  // But can also appear as expression (e.g., let x = console.log(...))
+  // console.log/error tratados em visitExpressionStatement quando standalone
+  // Mas também pode aparecer como expressão (ex: let x = console.log(...))
   if (node.callee.type === 'MemberExpression') {
     const obj = node.callee.object;
     const prop = node.callee.property;
     const propName = prop.name || prop.value;
 
-    // console.log / console.error as expression
+    // console.log / console.error como expressão
     if (obj.type === 'Identifier' && obj.name === 'console' && propName === 'log') {
       this.visitConsoleLog(node);
       const t = this.newTemp();
@@ -360,7 +360,7 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_INT };
     }
 
-    // Array methods
+    // Métodos de array
     if (propName === 'push') {
       const { temp: arrTemp } = this.visitExpression(obj);
       const { temp: valTemp, type: valType } = this.visitExpression(node.arguments[0]);
@@ -453,11 +453,11 @@ function visitCallExpression(node) {
       if (node.arguments.length > 1) {
         delCountTemp = this.visitExpression(node.arguments[1]).temp;
       } else {
-        // Default: delete everything from start
+        // Padrão: deleta tudo a partir do início
         delCountTemp = this.newTemp();
         this.emit(OP.ARRAY_LENGTH, delCountTemp, arrTemp);
       }
-      // Collect items to insert
+      // Coleta itens para inserir
       const items = [];
       for (let i = 2; i < node.arguments.length; i++) {
         const { temp, type } = this.visitExpression(node.arguments[i]);
@@ -488,7 +488,7 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_ARRAY };
     }
 
-    // Array higher-order methods (desugared into loops)
+    // Métodos de alta ordem de array (desaçucarados em loops)
     if (propName === 'forEach' && this._isArrayLike(obj)) {
       const { temp: arrTemp } = this.visitExpression(obj);
       const cbName = this._resolveCallbackName(node.arguments[0]);
@@ -539,7 +539,7 @@ function visitCallExpression(node) {
       const loopLabel = this.newLabel('map');
       const endLabel = this.newLabel('endMap');
 
-      // Create result array
+      // Cria array de resultado
       const resultArr = this.newTemp();
       this.emit(OP.ARRAY_NEW, resultArr, []);
 
@@ -636,7 +636,7 @@ function visitCallExpression(node) {
       const loopLabel = this.newLabel('reduce');
       const endLabel = this.newLabel('endReduce');
 
-      // Initial value
+      // Valor inicial
       if (node.arguments.length > 1) {
         const { temp: initTemp } = this.visitExpression(node.arguments[1]);
         this.emit(OP.STORE_VAR, accName, initTemp);
@@ -695,7 +695,7 @@ function visitCallExpression(node) {
       const foundLabel = this.newLabel('findFound');
       const endLabel = this.newLabel('endFind');
 
-      // Default result: undefined (0)
+      // Resultado padrão: undefined (0)
       const undefTemp = this.newTemp();
       this.emit(OP.LOAD_UNDEFINED, undefTemp);
       this.emit(OP.STORE_VAR, resultName, undefTemp);
@@ -912,7 +912,7 @@ function visitCallExpression(node) {
     if (propName === 'sort' && this._isArrayLike(obj)) {
       const { temp: arrTemp } = this.visitExpression(obj);
 
-      // Bubble sort with optional comparator
+      // Bubble sort com comparador opcional
       const iName = `_sort_i_${this.labelCounter}`;
       const jName = `_sort_j_${this.labelCounter}`;
       const outerLabel = this.newLabel('sortOuter');
@@ -927,7 +927,7 @@ function visitCallExpression(node) {
         cbName = this._resolveCallbackName(node.arguments[0]);
       }
 
-      // outer: for (i = 0; i < len - 1; i++)
+      // externo: for (i = 0; i < len - 1; i++)
       const iTemp = this.newTemp();
       this.emit(OP.LOAD_INT, iTemp, 0);
       this.emit(OP.STORE_VAR, iName, iTemp);
@@ -945,7 +945,7 @@ function visitCallExpression(node) {
       this.emit(OP.CMP_LT, cmpOuter, il, lenM1);
       this.emit(OP.JUMP_IF_FALSE, cmpOuter, outerEndLabel);
 
-      // inner: for (j = 0; j < len - i - 1; j++)
+      // interno: for (j = 0; j < len - i - 1; j++)
       const jTemp = this.newTemp();
       this.emit(OP.LOAD_INT, jTemp, 0);
       this.emit(OP.STORE_VAR, jName, jTemp);
@@ -967,7 +967,7 @@ function visitCallExpression(node) {
       this.emit(OP.CMP_LT, cmpInner, jl, bound);
       this.emit(OP.JUMP_IF_FALSE, cmpInner, innerEndLabel);
 
-      // Compare arr[j] and arr[j+1]
+      // Compara arr[j] e arr[j+1]
       const jl2 = this.newTemp();
       this.emit(OP.LOAD_VAR, jl2, jName);
       const aTemp = this.newTemp();
@@ -982,7 +982,7 @@ function visitCallExpression(node) {
       this.emit(OP.ARRAY_GET, bTemp, arrTemp, jp1);
 
       if (hasComparator) {
-        // Call comparator(a, b) — swap if result > 0
+        // Chama comparador(a, b) — troca se resultado > 0
         const cmpRes = this.newTemp();
         this.emit(OP.CALL, cmpRes, cbName, [
           { temp: aTemp, type: TYPE_INT },
@@ -994,13 +994,13 @@ function visitCallExpression(node) {
         this.emit(OP.CMP_GT, shouldSwap, cmpRes, zeroT);
         this.emit(OP.JUMP_IF_FALSE, shouldSwap, skipLabel);
       } else {
-        // Default: ascending order, swap if a > b
+        // Padrão: ordem crescente, troca se a > b
         const shouldSwap = this.newTemp();
         this.emit(OP.CMP_GT, shouldSwap, aTemp, bTemp);
         this.emit(OP.JUMP_IF_FALSE, shouldSwap, skipLabel);
       }
 
-      // Swap arr[j] and arr[j+1]
+      // Troca arr[j] e arr[j+1]
       const jl4 = this.newTemp();
       this.emit(OP.LOAD_VAR, jl4, jName);
       this.emit(OP.ARRAY_SET, arrTemp, jl4, bTemp);
@@ -1029,12 +1029,12 @@ function visitCallExpression(node) {
       return { temp: arrTemp, type: TYPE_ARRAY };
     }
 
-    // Math functions
+    // Funções Math
     if (obj.type === 'Identifier' && obj.name === 'Math') {
       return this.visitMathCall(propName, node.arguments);
     }
 
-    // Object static methods
+    // Métodos estáticos de Object
     if (obj.type === 'Identifier' && obj.name === 'Object') {
       if (propName === 'keys') {
         const { temp: objTemp } = this.visitExpression(node.arguments[0]);
@@ -1055,7 +1055,7 @@ function visitCallExpression(node) {
         return { temp: t, type: TYPE_ARRAY };
       }
       if (propName === 'assign') {
-        // Object.assign(target, ...sources) — copy properties from sources to target
+        // Object.assign(target, ...sources) — copia propriedades das sources para o target
         const { temp: targetTemp } = this.visitExpression(node.arguments[0]);
         for (let i = 1; i < node.arguments.length; i++) {
           const { temp: srcTemp } = this.visitExpression(node.arguments[i]);
@@ -1065,11 +1065,11 @@ function visitCallExpression(node) {
       }
     }
 
-    // Array.from() — creates a new array from an iterable (array or string)
+    // Array.from() — cria um novo array a partir de um iterável (array ou string)
     if (obj.type === 'Identifier' && obj.name === 'Array' && propName === 'from') {
       const { temp: srcTemp, type: srcType } = this.visitExpression(node.arguments[0]);
       if (srcType === TYPE_STRING) {
-        // String → array of single-char strings (use split with empty string)
+        // String → array de strings de um caractere (usa split com string vazia)
         const sepTemp = this.newTemp();
         const label = this.program.addString('');
         this.emit(OP.LOAD_STRING, sepTemp, label);
@@ -1077,7 +1077,7 @@ function visitCallExpression(node) {
         this.emit(OP.STR_SPLIT, t, srcTemp, sepTemp);
         return { temp: t, type: TYPE_ARRAY };
       }
-      // Array → shallow copy via slice(0, length)
+      // Array → cópia rasa via slice(0, length)
       const startTemp = this.newTemp();
       this.emit(OP.LOAD_INT, startTemp, 0);
       const lenTemp = this.newTemp();
@@ -1095,7 +1095,7 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_BOOL };
     }
 
-    // String static methods
+    // Métodos estáticos de String
     if (obj.type === 'Identifier' && obj.name === 'String' && propName === 'fromCharCode') {
       const { temp: codeTemp } = this.visitExpression(node.arguments[0]);
       const t = this.newTemp();
@@ -1103,7 +1103,7 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_STRING };
     }
 
-    // Number static methods
+    // Métodos estáticos de Number
     if (obj.type === 'Identifier' && obj.name === 'Number') {
       if (propName === 'isInteger') {
         const { temp: valTemp } = this.visitExpression(node.arguments[0]);
@@ -1131,7 +1131,7 @@ function visitCallExpression(node) {
       }
     }
 
-    // String methods
+    // Métodos de string
     if (propName === 'charAt') {
       const { temp: strTemp } = this.visitExpression(obj);
       const { temp: idxTemp } = this.visitExpression(node.arguments[0]);
@@ -1320,11 +1320,11 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_BOOL };
     }
 
-    // Static class method calls: ClassName.method(args) → ClassName_method(args)
+    // Chamadas de método estático de classe: ClassName.method(args) → ClassName_method(args)
     if (obj.type === 'Identifier') {
       const objInfo = this.analyzer.currentScope.lookup(obj.name);
       if (objInfo && objInfo.type === TYPE_FUNCTION && objInfo.className === obj.name) {
-        // This is the class itself, not an instance — static method call
+        // Este é a classe em si, não uma instância — chamada de método estático
         let qualClsName = obj.name;
         if (objInfo.qualifiedName) qualClsName = objInfo.qualifiedName;
         const fullMethodName = `${qualClsName}_${propName}`;
@@ -1339,21 +1339,21 @@ function visitCallExpression(node) {
       }
     }
 
-    // Instance method calls: obj.method(args) → ClassName_method(obj, args...)
+    // Chamadas de método de instância: obj.method(args) → ClassName_method(obj, args...)
     if (obj.type === 'Identifier') {
       const objInfo = this.analyzer.currentScope.lookup(obj.name);
       if (objInfo && objInfo.className) {
         const clsName = objInfo.className;
-        // Resolve qualified class name
+        // Resolve nome qualificado da classe
         let qualClsName = clsName;
         const clsInfo = this.analyzer.currentScope.lookup(clsName);
         if (clsInfo && clsInfo.qualifiedName) {
           qualClsName = clsInfo.qualifiedName;
         }
-        // Walk inheritance chain to find the method
+        // Percorre cadeia de herança para encontrar o método
         const fullMethodName = this._resolveClassMethod(qualClsName, propName);
         const { temp: objTemp } = this.visitExpression(obj);
-        const args = [{ temp: objTemp, type: TYPE_INT }]; // 'this' as first arg
+        const args = [{ temp: objTemp, type: TYPE_INT }]; // 'this' como primeiro argumento
         for (const arg of node.arguments) {
           const { temp, type } = this.visitExpression(arg);
           args.push({ temp, type });
@@ -1364,7 +1364,7 @@ function visitCallExpression(node) {
       }
     }
 
-    // this.method() inside class methods
+    // this.method() dentro de métodos de classe
     if (obj.type === 'Identifier' && obj.name === 'this') {
       const thisInfo = this.analyzer.currentScope.lookup('this');
       if (thisInfo && thisInfo.className) {
@@ -1373,7 +1373,7 @@ function visitCallExpression(node) {
         if (clsInfo && clsInfo.qualifiedName) {
           qualClsName = clsInfo.qualifiedName;
         }
-        // Walk inheritance chain to find the method
+        // Percorre cadeia de herança para encontrar o método
         const fullMethodName = this._resolveClassMethod(qualClsName, propName);
         const { temp: objTemp } = this.visitExpression(obj);
         const args = [{ temp: objTemp, type: TYPE_INT }];
@@ -1388,7 +1388,7 @@ function visitCallExpression(node) {
     }
   }
 
-  // super() call in constructor — call parent constructor
+  // Chamada super() no construtor — chama construtor pai
   if (node.callee.type === 'Super') {
     if (this._currentSuperClass) {
       const args = [];
@@ -1396,10 +1396,10 @@ function visitCallExpression(node) {
         const { temp, type } = this.visitExpression(arg);
         args.push({ temp, type });
       }
-      // Call parent constructor, get the parent object
+      // Chama construtor pai, obtém o objeto pai
       const parentObj = this.newTemp();
       this.emit(OP.CALL, parentObj, this._currentSuperClass, args);
-      // Copy all properties from parent object to 'this'
+      // Copia todas as propriedades do objeto pai para 'this'
       const thisTemp = this.newTemp();
       this.emit(OP.LOAD_VAR, thisTemp, 'this');
       this.emit(OP.OBJ_SPREAD, thisTemp, parentObj);
@@ -1408,14 +1408,14 @@ function visitCallExpression(node) {
     throw new Error('super() called outside of a class constructor');
   }
 
-  // super.method() call — call parent class method
+  // Chamada super.method() — chama método da classe pai
   if (node.callee.type === 'MemberExpression' && node.callee.object.type === 'Super') {
     if (this._currentSuperClass) {
       const methodName = node.callee.property.name;
       const fullMethodName = `${this._currentSuperClass}_${methodName}`;
       const thisTemp = this.newTemp();
       this.emit(OP.LOAD_VAR, thisTemp, 'this');
-      const args = [{ temp: thisTemp, type: TYPE_INT }]; // 'this' as first arg
+      const args = [{ temp: thisTemp, type: TYPE_INT }]; // 'this' como primeiro argumento
       for (const arg of node.arguments) {
         const { temp, type } = this.visitExpression(arg);
         args.push({ temp, type });
@@ -1427,7 +1427,7 @@ function visitCallExpression(node) {
     throw new Error('super.method() called outside of a class');
   }
 
-  // Global builtins: parseInt, parseFloat, Number, String, isNaN
+  // Builtins globais: parseInt, parseFloat, Number, String, isNaN
   if (node.callee.type === 'Identifier') {
     const name = node.callee.name;
     if (name === 'parseInt') {
@@ -1463,7 +1463,7 @@ function visitCallExpression(node) {
     }
   }
 
-  // IIFE or call on expression result: (function(x){...})(args), (() => x)(args)
+  // IIFE ou chamada no resultado de expressão: (function(x){...})(args), (() => x)(args)
   if (node.callee.type === 'FunctionExpression' || node.callee.type === 'ArrowFunctionExpression') {
     const exprResult = node.callee.type === 'FunctionExpression'
       ? this.visitFunctionExpression(node.callee)
@@ -1479,10 +1479,10 @@ function visitCallExpression(node) {
     return { temp: t, type: TYPE_INT };
   }
 
-  // Regular function call
+  // Chamada de função regular
   let funcName = node.callee.name;
 
-  // Resolve through importMap or qualified scope
+  // Resolve via importMap ou escopo qualificado
   if (funcName && this.importMap.has(funcName)) {
     funcName = this.importMap.get(funcName);
   } else if (funcName) {
@@ -1492,11 +1492,11 @@ function visitCallExpression(node) {
     }
   }
 
-  // Check for spread arguments
+  // Checa argumentos spread
   const hasSpread = node.arguments.some(a => a.type === 'SpreadElement');
 
   if (hasSpread) {
-    // Collect normal args before the spread, and the spread array
+    // Coleta args normais antes do spread, e o array de spread
     const normalArgs = [];
     let spreadArray = null;
     for (const arg of node.arguments) {
@@ -1522,9 +1522,9 @@ function visitCallExpression(node) {
   const t = this.newTemp();
   this.emit(OP.CALL, t, funcName, args);
 
-  // Look up inferred return type for this function
+  // Busca tipo de retorno inferido para esta função
   let retType = (this._functionReturnTypes && this._functionReturnTypes[funcName]) || TYPE_INT;
-  // If function returns a parameter directly, use the argument's type from call site
+  // Se a função retorna um parâmetro diretamente, usa o tipo do argumento do call site
   if (this._functionReturnParams && this._functionReturnParams[funcName] !== undefined) {
     const paramIdx = this._functionReturnParams[funcName];
     if (paramIdx < args.length) {
@@ -1637,7 +1637,7 @@ function visitMathCall(method, argNodes) {
 function visitUpdateExpression(node) {
   const rawName = node.argument.name;
   let name = rawName;
-  // Resolve through importMap or qualified scope
+  // Resolve via importMap ou escopo qualificado
   if (this.importMap.has(name)) {
     name = this.importMap.get(name);
   } else {
@@ -1647,7 +1647,7 @@ function visitUpdateExpression(node) {
     }
   }
 
-  // Enforce const
+  // Verifica const
   const constInfo = this.analyzer.currentScope.lookup(rawName);
   if (constInfo && constInfo.isConst) {
     const line = node.loc ? node.loc.start.line : '?';
@@ -1674,11 +1674,11 @@ function visitUpdateExpression(node) {
 }
 
 function visitNewExpression(node) {
-  // new ClassName(args...) → call the constructor function
+  // new ClassName(args...) → chama a função construtora
   const className = node.callee.name;
   let funcName = className;
 
-  // Resolve through importMap or qualified scope
+  // Resolve via importMap ou escopo qualificado
   if (this.importMap.has(funcName)) {
     funcName = this.importMap.get(funcName);
   } else {
@@ -1703,7 +1703,7 @@ function visitClassDeclaration(node) {
   const className = node.id.name;
   const qualifiedName = (!this.inFunction && this.moduleId) ? this.qualifyName(className) : className;
 
-  // Handle extends
+  // Trata herança (extends)
   let parentClassName = null;
   let parentQualifiedName = null;
   if (node.superClass) {
@@ -1712,20 +1712,20 @@ function visitClassDeclaration(node) {
     parentQualifiedName = (parentInfo && parentInfo.qualifiedName) || parentClassName;
   }
 
-  // Register class name as a function in scope
+  // Registra nome da classe como função no escopo
   const classInfo = { type: TYPE_FUNCTION, isConst: true, qualifiedName, className };
   if (parentClassName) classInfo.parentClass = parentQualifiedName;
   this.analyzer.currentScope.declare(className, classInfo);
 
-  // Store inheritance chain
+  // Armazena cadeia de herança
   if (!this._classInheritance) this._classInheritance = {};
   if (parentClassName) {
     this._classInheritance[qualifiedName] = parentQualifiedName;
   }
 
-  const methods = node.body.body; // ClassBody → MethodDefinition[]
+  const methods = node.body.body; // ClassBody → lista de MethodDefinition
 
-  // Find constructor
+  // Encontra construtor
   let constructorNode = null;
   const otherMethods = [];
   for (const method of methods) {
@@ -1736,8 +1736,8 @@ function visitClassDeclaration(node) {
     }
   }
 
-  // Generate constructor function: ClassName(params...)
-  // Creates empty object, sets properties via this.x = val, returns object
+  // Gera função construtora: ClassName(params...)
+  // Cria objeto vazio, define propriedades via this.x = val, retorna objeto
   {
     const ctorParams = constructorNode
       ? constructorNode.value.params.map(p => {
@@ -1758,7 +1758,7 @@ function visitClassDeclaration(node) {
     this._currentSuperClass = parentQualifiedName;
     this.analyzer.enterScope();
 
-    // Declare params
+    // Declara parâmetros
     if (constructorNode) {
       for (let i = 0; i < constructorNode.value.params.length; i++) {
         const p = constructorNode.value.params[i];
@@ -1776,21 +1776,21 @@ function visitClassDeclaration(node) {
       }
     }
 
-    // Create empty object for 'this'
+    // Cria objeto vazio para 'this'
     const thisTemp = this.newTemp();
     this.emit(OP.OBJ_NEW, thisTemp, [], []);
     this.analyzer.currentScope.declare('this', { type: TYPE_INT, isConst: false, className });
     this.emit(OP.STORE_VAR, 'this', thisTemp);
 
-    // Visit constructor body
-    // super(args) calls are handled inside visitCallExpression via _currentSuperClass
+    // Visita corpo do construtor
+    // Chamadas super(args) são tratadas dentro de visitCallExpression via _currentSuperClass
     if (constructorNode) {
       for (const stmt of constructorNode.value.body.body) {
         this.visitStatement(stmt);
       }
     }
 
-    // Return this
+    // Retorna this
     const retTemp = this.newTemp();
     this.emit(OP.LOAD_VAR, retTemp, 'this');
     this.emit(OP.RETURN, retTemp);
@@ -1802,7 +1802,7 @@ function visitClassDeclaration(node) {
     this._currentSuperClass = prevSuperClass;
   }
 
-  // Generate method functions: ClassName_methodName(this, params...)
+  // Gera funções de método: ClassName_methodName(this, params...)
   for (const method of otherMethods) {
     if (method.type !== 'MethodDefinition') continue;
     const methodName = method.key.name || method.key.value;
@@ -1813,7 +1813,7 @@ function visitClassDeclaration(node) {
       if (p.type === 'AssignmentPattern') return p.left.name;
       return p.name;
     });
-    // For non-static, 'this' is the first parameter; for static, no 'this'
+    // Para não-estático, 'this' é o primeiro parâmetro; para estático, sem 'this'
     const allParams = isStatic ? methodParams : ['this', ...methodParams];
 
     const func = new IRFunction(fullName, allParams);
@@ -1828,13 +1828,13 @@ function visitClassDeclaration(node) {
     this._currentSuperClass = parentQualifiedName;
     this.analyzer.enterScope();
 
-    // Declare 'this' param (non-static only)
+    // Declara parâmetro 'this' (apenas não-estático)
     if (!isStatic) {
       this.analyzer.currentScope.declare('this', { type: TYPE_INT, isConst: false, className });
       this.emit(OP.PARAM, 'this', 0);
     }
 
-    // Declare method params
+    // Declara parâmetros do método
     const paramOffset = isStatic ? 0 : 1;
     for (let i = 0; i < method.value.params.length; i++) {
       const p = method.value.params[i];
@@ -1851,7 +1851,7 @@ function visitClassDeclaration(node) {
       }
     }
 
-    // Visit method body
+    // Visita corpo do método
     for (const stmt of method.value.body.body) {
       this.visitStatement(stmt);
     }
@@ -1863,10 +1863,10 @@ function visitClassDeclaration(node) {
     this._currentSuperClass = prevSuperClass;
   }
 
-  // Store method mapping info for method call resolution
+  // Armazena info de mapeamento de métodos para resolução de chamadas
   if (!this._classMethods) this._classMethods = {};
   this._classMethods[qualifiedName] = otherMethods.map(m => m.key.name || m.key.value);
-  // Store getter/setter info
+  // Armazena info de getter/setter
   if (!this._classGetters) this._classGetters = {};
   if (!this._classSetters) this._classSetters = {};
   this._classGetters[qualifiedName] = otherMethods
@@ -1903,7 +1903,7 @@ function _emitObjectDestructuring(paramName, pattern) {
 function _emitArrayDestructuring(paramName, pattern) {
   for (let j = 0; j < pattern.elements.length; j++) {
     const elem = pattern.elements[j];
-    if (!elem) continue; // skip holes
+    if (!elem) continue; // pula buracos
     const localName = elem.name;
     const paramTemp = this.newTemp();
     this.emit(OP.LOAD_VAR, paramTemp, paramName);
@@ -1939,7 +1939,7 @@ function _isSetter(className, propName) {
 }
 
 function _resolveClassMethod(qualClsName, methodName) {
-  // Walk the inheritance chain to find where the method is defined
+  // Percorre a cadeia de herança para encontrar onde o método está definido
   let cls = qualClsName;
   while (cls) {
     if (this._classMethods && this._classMethods[cls]) {
@@ -1947,10 +1947,10 @@ function _resolveClassMethod(qualClsName, methodName) {
         return `${cls}_${methodName}`;
       }
     }
-    // Walk to parent
+    // Vai para o pai
     cls = (this._classInheritance && this._classInheritance[cls]) || null;
   }
-  // Default: assume it's on the current class (may fail at link time)
+  // Padrão: assume que está na classe atual (pode falhar no link)
   return `${qualClsName}_${methodName}`;
 }
 

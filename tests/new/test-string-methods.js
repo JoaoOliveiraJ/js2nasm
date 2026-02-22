@@ -1,4 +1,4 @@
-// expected: H\n2\n-1\ntrue\nfalse\nHELLO\nhello\ntrimmed
+// esperado: H\n2\n-1\ntrue\nfalse\nHELLO\nhello\ntrimmed
 let s = "Hello";
 console.log(s.charAt(0));
 console.log(s.indexOf("llo"));

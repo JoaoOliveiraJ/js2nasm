@@ -5,43 +5,43 @@ const path = require('path');
 const acorn = require('acorn');
 
 /**
- * Resolves ES module imports recursively from an entry file.
- * Builds a dependency graph, performs topological sort, and detects cycles.
+ * Resolve imports de módulos ES recursivamente a partir de um arquivo de entrada.
+ * Constrói um grafo de dependências, realiza ordenação topológica e detecta ciclos.
  */
 class ModuleResolver {
   constructor() {
     this.modules = new Map(); // absPath → ModuleInfo
-    this.order = [];          // topologically sorted absPath[]
+    this.order = [];          // absPath[] ordenados topologicamente
     this.nextId = 0;
   }
 
   /**
-   * Resolve all modules starting from the entry file.
-   * Returns { modules: Map<absPath, ModuleInfo>, order: string[] }
+   * Resolve todos os módulos a partir do arquivo de entrada.
+   * Retorna { modules: Map<absPath, ModuleInfo>, order: string[] }
    *
    * ModuleInfo: { id: 'mod0', absPath, source, ast, exports: Map, imports: [] }
    */
   resolve(entryPath) {
     const absEntry = path.resolve(entryPath);
     if (!fs.existsSync(absEntry)) {
-      throw new Error(`Entry file not found: ${absEntry}`);
+      throw new Error(`Arquivo de entrada não encontrado: ${absEntry}`);
     }
 
-    // Check if entry uses module syntax
+    // Verifica se a entrada usa sintaxe de módulos
     const entrySource = fs.readFileSync(absEntry, 'utf-8');
     if (!this._usesModuleSyntax(entrySource)) {
-      return null; // signal: use single-file path
+      return null; // sinal: usar caminho de arquivo único
     }
 
-    // DFS to discover all modules
-    const visiting = new Set(); // cycle detection (gray nodes)
-    const visited = new Set();  // fully processed (black nodes)
+    // DFS para descobrir todos os módulos
+    const visiting = new Set(); // detecção de ciclos (nós cinza)
+    const visited = new Set();  // totalmente processado (nós pretos)
 
     this._visit(absEntry, visiting, visited);
 
     return {
       modules: this.modules,
-      order: this.order, // dependencies first, entry last
+      order: this.order, // dependências primeiro, entrada por último
     };
   }
 
@@ -49,7 +49,7 @@ class ModuleResolver {
     if (visited.has(absPath)) return;
 
     if (visiting.has(absPath)) {
-      throw new Error(`Circular dependency detected involving: ${absPath}`);
+      throw new Error(`Dependência circular detectada envolvendo: ${absPath}`);
     }
 
     visiting.add(absPath);
@@ -66,11 +66,11 @@ class ModuleResolver {
       absPath,
       source,
       ast,
-      exports: new Map(),  // exportedName → localName
+      exports: new Map(),  // nomeExportado → nomeLocal
       imports: [],          // { from: absPath, specifiers: [{imported, local}] }
     };
 
-    // Scan for imports and exports
+    // Escaneia imports e exports
     for (const node of ast.body) {
       if (node.type === 'ImportDeclaration') {
         const fromPath = this._resolveSpecifier(node.source.value, absPath);
@@ -90,7 +90,7 @@ class ModuleResolver {
         }
         moduleInfo.imports.push({ from: fromPath, specifiers });
 
-        // Recurse into dependency
+        // Recursa na dependência
         this._visit(fromPath, visiting, visited);
       } else if (node.type === 'ExportNamedDeclaration') {
         if (node.declaration) {
@@ -114,7 +114,7 @@ class ModuleResolver {
         } else if (node.declaration.type === 'Identifier') {
           moduleInfo.exports.set('default', node.declaration.name);
         } else {
-          // anonymous default export — give it a synthetic name
+          // export default anônimo — atribui um nome sintético
           moduleInfo.exports.set('default', `_default_${moduleInfo.id}`);
         }
       }
@@ -124,38 +124,38 @@ class ModuleResolver {
 
     visiting.delete(absPath);
     visited.add(absPath);
-    this.order.push(absPath); // post-order = topological order
+    this.order.push(absPath); // pós-ordem = ordem topológica
   }
 
   /**
-   * Resolve a relative specifier to an absolute path.
-   * Adds .js extension if missing.
+   * Resolve um especificador relativo para um caminho absoluto.
+   * Adiciona extensão .js se estiver faltando.
    */
   _resolveSpecifier(specifier, fromPath) {
     if (!specifier.startsWith('.') && !specifier.startsWith('/')) {
-      throw new Error(`Bare specifiers not supported: '${specifier}' in ${fromPath}`);
+      throw new Error(`Especificadores bare não suportados: '${specifier}' em ${fromPath}`);
     }
 
     const dir = path.dirname(fromPath);
     let resolved = path.resolve(dir, specifier);
 
-    // Add .js if missing
+    // Adiciona .js se estiver faltando
     if (!path.extname(resolved)) {
       resolved += '.js';
     }
 
     if (!fs.existsSync(resolved)) {
-      throw new Error(`Module not found: '${specifier}' (resolved to ${resolved}) imported from ${fromPath}`);
+      throw new Error(`Módulo não encontrado: '${specifier}' (resolvido para ${resolved}) importado de ${fromPath}`);
     }
 
     return resolved;
   }
 
   /**
-   * Quick check: does the source contain import or export statements?
+   * Verificação rápida: o código fonte contém declarações import ou export?
    */
   _usesModuleSyntax(source) {
-    // Try parsing as module and check for import/export nodes
+    // Tenta fazer parsing como módulo e verifica nós de import/export
     try {
       const ast = acorn.parse(source, {
         ecmaVersion: 2022,
@@ -171,7 +171,7 @@ class ModuleResolver {
         }
       }
     } catch (e) {
-      // Not valid module syntax — treat as script
+      // Não é sintaxe de módulo válida — tratar como script
     }
     return false;
   }

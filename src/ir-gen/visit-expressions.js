@@ -80,23 +80,23 @@ function visitLiteral(node) {
 function visitIdentifier(node) {
   const t = this.newTemp();
 
-  // Global constants
+  // Constantes globais
   if (node.name === 'undefined') {
     this.emit(OP.LOAD_UNDEFINED, t);
     return { temp: t, type: TYPE_INT };
   }
   if (node.name === 'Infinity') {
-    this.emit(OP.LOAD_INT, t, 9007199254740991); // MAX_SAFE_INTEGER as approximation
+    this.emit(OP.LOAD_INT, t, 9007199254740991); // MAX_SAFE_INTEGER como aproximação
     return { temp: t, type: TYPE_INT };
   }
   if (node.name === 'NaN') {
-    this.emit(OP.LOAD_INT, t, 0); // NaN approximated as 0
+    this.emit(OP.LOAD_INT, t, 0); // NaN aproximado como 0
     return { temp: t, type: TYPE_INT };
   }
 
   const info = this.analyzer.currentScope.lookup(node.name);
 
-  // Resolve the variable name: importMap → qualified global → raw name
+  // Resolve o nome da variável: importMap → qualified global → nome bruto
   let resolvedName = node.name;
   if (this.importMap.has(node.name)) {
     resolvedName = this.importMap.get(node.name);
@@ -113,13 +113,13 @@ function visitBinaryExpression(node) {
   const { temp: right, type: rt } = this.visitExpression(node.right);
   const t = this.newTemp();
 
-  // String concatenation
+  // Concatenação de strings
   if (node.operator === '+' && (lt === TYPE_STRING || rt === TYPE_STRING)) {
     this.emit(OP.STR_CONCAT, t, left, right, lt, rt);
     return { temp: t, type: TYPE_STRING };
   }
 
-  // String comparison: use strcmp-based comparison
+  // Comparação de strings: usa comparação baseada em strcmp
   if (lt === TYPE_STRING && rt === TYPE_STRING &&
       ['<', '>', '<=', '>=', '==', '===', '!=', '!=='].includes(node.operator)) {
     const setInstrMap = {
@@ -143,9 +143,9 @@ function visitBinaryExpression(node) {
     return { temp: t, type: TYPE_BOOL };
   }
 
-  // instanceof — check className from analyzer
+  // instanceof — checa className do analyzer
   if (node.operator === 'instanceof') {
-    // Check if left operand has className matching right operand's name
+    // Checa se o operando esquerdo tem className correspondente ao nome do operando direito
     if (node.left.type === 'Identifier' && node.right.type === 'Identifier') {
       const objInfo = this.analyzer.currentScope.lookup(node.left.name);
       if (objInfo && objInfo.className === node.right.name) {
@@ -181,7 +181,7 @@ function visitBinaryExpression(node) {
 }
 
 function visitUnaryExpression(node) {
-  // typeof is special — argument may be undefined identifier
+  // typeof é especial — argumento pode ser identificador indefinido
   if (node.operator === 'typeof') {
     return this.visitTypeofExpression(node);
   }
@@ -209,7 +209,7 @@ function visitUnaryExpression(node) {
     return { temp: t, type: TYPE_INT };
   }
   if (node.operator === 'delete') {
-    // delete obj.prop
+    // delete obj.prop (acesso por ponto)
     if (node.argument.type === 'MemberExpression' && !node.argument.computed) {
       const { temp: objTemp } = this.visitExpression(node.argument.object);
       const keyLabel = this.program.addString(node.argument.property.name);
@@ -217,7 +217,7 @@ function visitUnaryExpression(node) {
       this.emit(OP.LOAD_BOOL, t, 1);
       return { temp: t, type: TYPE_BOOL };
     }
-    // delete obj["key"]
+    // delete obj["key"] (acesso por colchete)
     if (node.argument.type === 'MemberExpression' && node.argument.computed) {
       const { temp: objTemp } = this.visitExpression(node.argument.object);
       if (node.argument.property.type === 'Literal' && typeof node.argument.property.value === 'string') {
@@ -241,7 +241,7 @@ function visitTypeofExpression(node) {
     const { type } = this.visitExpression(node.argument);
     typeHint = type;
   } catch (e) {
-    // typeof on undeclared var returns "undefined"
+    // typeof em variável não declarada retorna "undefined"
   }
   const typeStr = {
     [TYPE_INT]: 'number', [TYPE_FLOAT]: 'number',
@@ -263,7 +263,7 @@ function visitLogicalExpression(node) {
     const { temp: left } = this.visitExpression(node.left);
     this.emit(OP.JUMP_IF_FALSE, left, skipLabel);
     const { temp: right } = this.visitExpression(node.right);
-    // result is the right value
+    // resultado é o valor da direita
     this.emit(OP.STORE_VAR, t, right);
     this.emit(OP.JUMP, endLabel);
     this.emit(OP.LABEL, skipLabel);
@@ -289,8 +289,8 @@ function visitLogicalExpression(node) {
     return { temp: t, type: TYPE_BOOL };
   }
 
-  // ?? (nullish coalescing) — without runtime type tags, behaves like ||
-  // (checks falsy, not just null/undefined)
+  // ?? (nullish coalescing) — sem type tags em runtime, se comporta como ||
+  // (checa falsy, não só null/undefined)
   if (node.operator === '??') {
     const skipLabel = this.newLabel('nc_skip');
     const endLabel = this.newLabel('nc_end');
@@ -341,7 +341,7 @@ function visitSequenceExpression(node) {
 }
 
 function visitThisExpression(node) {
-  // 'this' is treated as a regular variable
+  // 'this' é tratado como uma variável normal
   const t = this.newTemp();
   this.emit(OP.LOAD_VAR, t, 'this');
   const info = this.analyzer.currentScope.lookup('this');
@@ -349,8 +349,8 @@ function visitThisExpression(node) {
 }
 
 function visitChainExpression(node) {
-  // ChainExpression wraps a chain of optional member/call expressions.
-  // We walk the inner expression, inserting null-checks at each optional step.
+  // ChainExpression envolve uma cadeia de expressões member/call opcionais.
+  // Percorremos a expressão interna, inserindo checagens de null em cada passo opcional.
   const endLabel = this.newLabel('chain_end');
   const result = this.newTemp();
 
@@ -362,10 +362,10 @@ function visitChainExpression(node) {
 }
 
 function _visitChainInner(node, endLabel, resultTemp) {
-  // MemberExpression with optional: obj?.prop or obj?.[expr]
+  // MemberExpression com optional: obj?.prop ou obj?.[expr]
   if (node.type === 'MemberExpression') {
     let objResult;
-    // Recursively handle chained optionals on the object side
+    // Lida recursivamente com optionals encadeados no lado do objeto
     if (node.object.type === 'MemberExpression' && (node.object.optional || false)) {
       objResult = this._visitChainInner(node.object, endLabel, resultTemp);
     } else if (node.object.type === 'CallExpression' && (node.object.optional || false)) {
@@ -374,7 +374,7 @@ function _visitChainInner(node, endLabel, resultTemp) {
       objResult = this.visitExpression(node.object);
     }
 
-    // If this step is optional, emit null check
+    // Se esse passo é opcional, emite checagem de null
     if (node.optional) {
       const zeroTemp = this.newTemp();
       this.emit(OP.LOAD_INT, zeroTemp, 0);
@@ -382,7 +382,7 @@ function _visitChainInner(node, endLabel, resultTemp) {
       this.emit(OP.JUMP_IF_FALSE, objResult.temp, endLabel);
     }
 
-    // Now do the member access
+    // Agora faz o acesso ao membro
     if (node.computed) {
       const prop = node.property;
       if (prop.type === 'Literal' && typeof prop.value === 'string') {
@@ -396,7 +396,7 @@ function _visitChainInner(node, endLabel, resultTemp) {
       this.emit(OP.ARRAY_GET, t, objResult.temp, idxTemp);
       return { temp: t, type: TYPE_INT };
     } else {
-      // .length special case
+      // Caso especial de .length
       if (node.property.name === 'length') {
         const t = this.newTemp();
         if (objResult.type === TYPE_STRING) {
@@ -413,12 +413,12 @@ function _visitChainInner(node, endLabel, resultTemp) {
     }
   }
 
-  // CallExpression with optional: obj?.method()
+  // CallExpression com optional: obj?.method()
   if (node.type === 'CallExpression') {
-    // For optional calls, we delegate to the normal visitCallExpression
-    // but first handle the optional check on the callee
+    // Para chamadas opcionais, delegamos ao visitCallExpression normal
+    // mas primeiro tratamos a checagem opcional no callee
     if (node.optional && node.callee.type === 'MemberExpression') {
-      // Evaluate the object first
+      // Avalia o objeto primeiro
       let objResult;
       if (node.callee.object.type === 'MemberExpression' && (node.callee.object.optional || false)) {
         objResult = this._visitChainInner(node.callee.object, endLabel, resultTemp);
@@ -431,11 +431,11 @@ function _visitChainInner(node, endLabel, resultTemp) {
       this.emit(OP.STORE_VAR, resultTemp, zeroTemp);
       this.emit(OP.JUMP_IF_FALSE, objResult.temp, endLabel);
     }
-    // Delegate to normal call expression visitor
+    // Delega ao visitor normal de call expression
     return this.visitCallExpression(node);
   }
 
-  // Not optional — just visit normally
+  // Não é opcional — visita normalmente
   return this.visitExpression(node);
 }
 

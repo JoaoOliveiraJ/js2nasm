@@ -1,4 +1,4 @@
-// expected: 5\n10\n10
+// esperado: 5\n10\n10
 let a = 0;
 let b = a ?? 5;
 console.log(b);

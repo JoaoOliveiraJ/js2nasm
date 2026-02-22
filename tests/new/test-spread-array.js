@@ -1,4 +1,4 @@
-// expected: 4\n1\n2\n3\n99
+// esperado: 4\n1\n2\n3\n99
 let arr = [1, 2, 3];
 let arr2 = [...arr, 99];
 console.log(arr2.length);

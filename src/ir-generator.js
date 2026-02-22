@@ -6,24 +6,24 @@ const { TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_BOOL, TYPE_ARRAY, TYPE_FUNCTION 
 
 class IRGenerator {
   /**
-   * @param {string} [moduleId] - e.g. 'mod0'. If omitted, single-file mode (no mangling).
-   * @param {object} [moduleInfo] - { exports: Map, imports: [] } from ModuleResolver.
-   * @param {Map}    [allModules] - full modules map so we can resolve imported names.
+   * @param {string} [moduleId] - ex.: 'mod0'. Se omitido, modo arquivo único (sem mangling).
+   * @param {object} [moduleInfo] - { exports: Map, imports: [] } do ModuleResolver.
+   * @param {Map}    [allModules] - mapa completo de módulos para resolver nomes importados.
    */
   constructor(moduleId, moduleInfo, allModules) {
     this.analyzer = new Analyzer();
     this.program = new IRProgram();
-    this.currentInstructions = null; // points to current function body or main
+    this.currentInstructions = null; // aponta para o corpo da função atual ou main
     this.tempCounter = 0;
     this.labelCounter = 0;
-    this.loopStack = []; // { continueLabel, breakLabel }
-    this.inFunction = false; // true when generating code inside a function
+    this.loopStack = []; // { continueLabel, breakLabel } — pilha de loops
+    this.inFunction = false; // true quando gerando código dentro de uma função
 
-    // Module support
-    this.moduleId = moduleId || null;       // null = single-file mode
+    // Suporte a módulos
+    this.moduleId = moduleId || null;       // null = modo arquivo único
     this.moduleInfo = moduleInfo || null;
     this.allModules = allModules || null;
-    this.importMap = new Map();             // localName → qualified name from other module
+    this.importMap = new Map();             // localName → nome qualificado de outro módulo
 
     if (this.moduleId && this.moduleInfo) {
       this._buildImportMap();
@@ -31,8 +31,8 @@ class IRGenerator {
   }
 
   /**
-   * Qualify a top-level name with the module prefix.
-   * In single-file mode (no moduleId) returns name unchanged.
+   * Qualifica um nome de nível superior com o prefixo do módulo.
+   * No modo arquivo único (sem moduleId) retorna o nome sem mudança.
    */
   qualifyName(name) {
     if (!this.moduleId) return name;
@@ -61,9 +61,9 @@ class IRGenerator {
     this.currentInstructions = this.program.main;
 
     for (const node of ast.body) {
-      // Module-level declarations handled specially
+      // Declarações de nível de módulo tratadas especialmente
       if (node.type === 'ImportDeclaration') {
-        // Imports are resolved via importMap — nothing to emit
+        // Imports são resolvidos via importMap — nada a emitir
         continue;
       }
       if (node.type === 'ExportNamedDeclaration') {
@@ -131,24 +131,24 @@ class IRGenerator {
   _unsupportedError(node) {
     const line = node.loc ? node.loc.start.line : '?';
     const hints = {
-      'ObjectExpression': 'Object literal syntax error. Only simple { key: value } properties are supported.',
-      'ClassExpression': 'Class expressions are not supported. Use class declarations instead.',
-      'YieldExpression': 'Generators (yield) are not supported.',
-      'AwaitExpression': 'async/await is not supported.',
-      'TaggedTemplateExpression': 'Tagged templates are not supported.',
-      'WithStatement': '`with` is not supported.',
-      'ImportExpression': 'Dynamic import() is not supported. Use static import declarations.',
-      'MetaProperty': 'import.meta is not supported.',
+      'ObjectExpression': 'Erro de sintaxe em literal de objeto. Apenas propriedades simples { key: value } são suportadas.',
+      'ClassExpression': 'Expressões de classe não são suportadas. Use declarações de classe.',
+      'YieldExpression': 'Generators (yield) não são suportados.',
+      'AwaitExpression': 'async/await não é suportado.',
+      'TaggedTemplateExpression': 'Tagged templates não são suportados.',
+      'WithStatement': '`with` não é suportado.',
+      'ImportExpression': 'import() dinâmico não é suportado. Use declarações de import estáticas.',
+      'MetaProperty': 'import.meta não é suportado.',
     };
     const hint = hints[node.type];
     if (hint) {
-      return `${hint} (line ${line})`;
+      return `${hint} (linha ${line})`;
     }
-    return `Unsupported syntax: ${node.type} at line ${line}`;
+    return `Sintaxe não suportada: ${node.type} na linha ${line}`;
   }
 }
 
-// Mixin extracted methods onto prototype
+// Aplica métodos extraídos no prototype via mixin
 const visitExpressions = require('./ir-gen/visit-expressions');
 const visitStatements  = require('./ir-gen/visit-statements');
 const visitFunctions   = require('./ir-gen/visit-functions');

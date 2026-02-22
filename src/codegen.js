@@ -7,15 +7,15 @@ class CodeGenerator {
   constructor(irProgram) {
     this.ir = irProgram;
     this.output = [];
-    this.tempOffsets = new Map();  // temp/var name → stack offset from rbp
+    this.tempOffsets = new Map();  // nome de temp/var → deslocamento na stack a partir de rbp
     this.nextOffset = 0;
     this.currentLocals = null;
-    this.inFunction = false; // true when emitting function code
+    this.inFunction = false; // verdadeiro quando está emitindo código de função
     this._labelCounter = 0;
   }
 
   getOffset(name) {
-    // Global variables don't need stack space
+    // Variáveis globais não precisam de espaço na stack
     if (this.isGlobal(name)) return -1;
     if (!this.tempOffsets.has(name)) {
       this.nextOffset += 8;
@@ -29,7 +29,7 @@ class CodeGenerator {
   }
 
   loc(name) {
-    // Global variables use BSS section labels
+    // Variáveis globais usam labels da seção BSS
     if (this.isGlobal(name)) {
       return `[gvar_${name}]`;
     }
@@ -88,14 +88,14 @@ class CodeGenerator {
     this.instr('str_undefined db "undefined", 0');
     this.blank();
 
-    // String literals
+    // Literais de string
     for (const { label, value } of this.ir.strings) {
       const escaped = this.escapeNasmString(value);
       this.instr(`${label} db ${escaped}, 0`);
     }
     this.blank();
 
-    // Float constants
+    // Constantes float
     for (const { label, value } of this.ir.floats) {
       this.instr(`${label} dq ${this.floatToHex(value)}`);
     }
@@ -103,10 +103,10 @@ class CodeGenerator {
 
     this.line('section .bss');
     this.instr('print_buf resb 256');
-    // Exception handler stack (up to 32 nested try blocks, 24 bytes each: handler_addr + saved_rbp + saved_rsp)
+    // Stack de tratamento de exceções (até 32 blocos try aninhados, 24 bytes cada: handler_addr + rbp salvo + rsp salvo)
     this.instr('_exc_stack resb 768');  // 32 * 24
     this.instr('_exc_sp resq 1');
-    // Global variable storage
+    // Armazenamento de variáveis globais
     for (const name of this.ir.globals) {
       this.instr(`gvar_${name} resq 1`);
     }
@@ -167,15 +167,15 @@ class CodeGenerator {
     this.instr('extern strcat');
     this.blank();
 
-    // Helper functions
+    // Funções auxiliares
     this.emitHelpers();
 
-    // User functions
+    // Funções do usuário
     for (const func of this.ir.functions) {
       this.emitFunction(func);
     }
 
-    // Main
+    // Principal
     this.emitMain();
   }
 
@@ -184,10 +184,10 @@ class CodeGenerator {
     this.nextOffset = 0;
     this.inFunction = true;
 
-    // Pre-scan to determine stack needs
+    // Pré-varredura para determinar necessidades da stack
     this.prescanInstructions(func.body);
 
-    const stackSize = this.alignStack(this.nextOffset + 32); // +32 shadow space
+    const stackSize = this.alignStack(this.nextOffset + 32); // +32 shadow space (espaço sombra)
 
     this.label(`func_${func.name}`);
     this.instr('push rbp');
@@ -195,16 +195,16 @@ class CodeGenerator {
     this.instr(`sub rsp, ${stackSize}`);
     this.blank();
 
-    // Save params from registers to stack (first 4)
+    // Salva parâmetros dos registradores na stack (primeiros 4)
     const paramRegs = ['rcx', 'rdx', 'r8', 'r9'];
     for (let i = 0; i < func.params.length && i < 4; i++) {
       this.instr(`mov ${this.loc(func.params[i])}, ${paramRegs[i]}`);
     }
-    // Load extra params from caller's stack (>4)
-    // Windows x64: first 4 in regs, rest at [rbp+16+32+i*8] = [rbp+48+i*8]
-    // (rbp+0 = saved rbp, rbp+8 = return addr, rbp+16..47 = shadow space, rbp+48+ = extra args)
+    // Carrega parâmetros extras da stack do chamador (>4)
+    // Windows x64: primeiros 4 em regs, restante em [rbp+16+32+i*8] = [rbp+48+i*8]
+    // (rbp+0 = rbp salvo, rbp+8 = endereço de retorno, rbp+16..47 = shadow space, rbp+48+ = args extras)
     for (let i = 4; i < func.params.length; i++) {
-      const stackArgOffset = 16 + 32 + (i - 4) * 8; // skip saved rbp + ret addr + shadow space
+      const stackArgOffset = 16 + 32 + (i - 4) * 8; // pula rbp salvo + endereço de retorno + shadow space
       this.instr(`mov rax, [rbp+${stackArgOffset}]`);
       this.instr(`mov ${this.loc(func.params[i])}, rax`);
     }
@@ -212,8 +212,8 @@ class CodeGenerator {
 
     this.emitInstructions(func.body);
 
-    // Default return (in case no explicit return)
-    this.comment('default return 0');
+    // Retorno padrão (caso não haja retorno explícito)
+    this.comment('retorno padrão 0');
     this.instr('xor rax, rax');
     this.instr('leave');
     this.instr('ret');
@@ -226,7 +226,7 @@ class CodeGenerator {
     this.nextOffset = 0;
     this.inFunction = false;
 
-    // Pre-scan main instructions
+    // Pré-varredura das instruções do main
     this.prescanInstructions(this.ir.main);
 
     const stackSize = this.alignStack(this.nextOffset + 32);
@@ -237,8 +237,8 @@ class CodeGenerator {
     this.instr(`sub rsp, ${stackSize}`);
     this.blank();
 
-    // Init stdout handle
-    this.comment('Init stdout');
+    // Inicializa handle do stdout
+    this.comment('Inicializa stdout');
     this.instr('sub rsp, 32');
     this.instr('mov rcx, STD_OUTPUT_HANDLE');
     this.instr('call GetStdHandle');
@@ -246,8 +246,8 @@ class CodeGenerator {
     this.instr('mov [hStdout], rax');
     this.blank();
 
-    // Init heap
-    this.comment('Init heap');
+    // Inicializa heap
+    this.comment('Inicializa heap');
     this.instr('sub rsp, 32');
     this.instr('call GetProcessHeap');
     this.instr('add rsp, 32');
@@ -468,8 +468,8 @@ class CodeGenerator {
   }
 
   alignStack(size) {
-    // Must be 16-byte aligned. Since push rbp gives 8 bytes offset from 16,
-    // sub rsp needs to result in 16-byte alignment
+    // Deve ser alinhado a 16 bytes. Como push rbp dá 8 bytes de deslocamento a partir de 16,
+    // sub rsp precisa resultar em alinhamento de 16 bytes
     return Math.ceil(size / 16) * 16;
   }
 
@@ -573,7 +573,7 @@ class CodeGenerator {
         this.emitReturn(ops[0]);
         break;
       case OP.PARAM:
-        // handled in emitFunction
+        // tratado em emitFunction
         break;
       case OP.CONSOLE_LOG:
         this.emitConsoleLog(ops[0]);
@@ -615,7 +615,7 @@ class CodeGenerator {
         this.emitTemplate(ops[0], ops[1]);
         break;
       case OP.CONSOLE_ERROR:
-        // console.error — same as console.log for now (prints to stdout)
+        // console.error — mesmo que console.log por enquanto (imprime no stdout)
         this.emitConsoleLog(ops[0]);
         break;
       case OP.PROCESS_EXIT:
@@ -632,7 +632,7 @@ class CodeGenerator {
         this.emitMathMin(ops[0], ops[1], ops[2]);
         break;
       case OP.MATH_FLOOR:
-        // For integers, floor is identity
+        // Para inteiros, floor é identidade
         this.emitLoadVar(ops[0], ops[1]);
         break;
       case OP.MATH_POW:
@@ -754,7 +754,7 @@ class CodeGenerator {
       case OP.OBJ_NEW_EMPTY:
         this.emitObjNew(ops[0], [], []);
         break;
-      // Array methods
+      // Métodos de Array
       case OP.ARRAY_POP:
         this.emitArrayPop(ops[0], ops[1]);
         break;
@@ -788,12 +788,12 @@ class CodeGenerator {
       case OP.ARRAY_FILL:
         this.emitArrayFill(ops[0], ops[1], ops[2], ops[3], ops[4]);
         break;
-      // String methods
+      // Métodos de String
       case OP.STR_SLICE:
         this.emitStrSlice(ops[0], ops[1], ops[2], ops[3]);
         break;
       case OP.STR_SUBSTRING:
-        this.emitStrSlice(ops[0], ops[1], ops[2], ops[3]); // same impl
+        this.emitStrSlice(ops[0], ops[1], ops[2], ops[3]); // mesma implementação
         break;
       case OP.STR_SPLIT:
         this.emitStrSplit(ops[0], ops[1], ops[2]);
@@ -840,7 +840,7 @@ class CodeGenerator {
       case OP.NUM_TO_FIXED:
         this.emitNumToFixed(ops[0], ops[1], ops[2]);
         break;
-      // Object methods
+      // Métodos de Object
       case OP.OBJ_KEYS:
         this.emitObjKeys(ops[0], ops[1]);
         break;
@@ -854,38 +854,38 @@ class CodeGenerator {
         this.emitObjHasOwn(ops[0], ops[1], ops[2]);
         break;
       case OP.OBJ_DELETE:
-        this.comment('OBJ_DELETE not yet implemented');
+        this.comment('OBJ_DELETE ainda não implementado');
         break;
-      // Builtins
+      // Funções nativas
       case OP.PARSE_INT:
         this.emitParseInt(ops[0], ops[1]);
         break;
       case OP.PARSE_FLOAT:
-        this.emitParseInt(ops[0], ops[1]); // simplified
+        this.emitParseInt(ops[0], ops[1]); // simplificado
         break;
       case OP.TO_STRING:
         this.emitToString(ops[0], ops[1]);
         break;
       case OP.IS_NAN:
-        // Simplified: in this runtime without floats, always false for ints
+        // Simplificado: neste runtime sem floats, sempre falso para inteiros
         this.emitLoadInt(ops[0], 0);
         break;
       case OP.ARRAY_IS_ARRAY:
-        this.comment('Array.isArray - simplified');
-        this.emitLoadInt(ops[0], 0); // simplified placeholder
+        this.comment('Array.isArray - simplificado');
+        this.emitLoadInt(ops[0], 0); // placeholder simplificado
         break;
       case OP.STR_CMP:
         this.emitStrCmp(ops[0], ops[1], ops[2], ops[3]);
         break;
       case OP.TYPEOF:
-        // Already resolved at IR generation time as string literal
+        // Já resolvido no momento da geração de IR como literal de string
         break;
       default:
         this.comment(`UNIMPLEMENTED: ${inst.op}`);
     }
   }
 
-  // ---- Core emit helpers (kept in main file) ----
+  // ---- Auxiliares principais de emissão (mantidos no arquivo principal) ----
 
   emitLoadInt(dest, value) {
     if (value === 0) {
@@ -940,7 +940,7 @@ class CodeGenerator {
     this.instr(`mov rax, ${this.loc(left)}`);
     this.instr('cqo');
     this.instr(`idiv qword ${this.loc(right)}`);
-    this.instr(`mov ${this.loc(dest)}, rdx`); // remainder in rdx
+    this.instr(`mov ${this.loc(dest)}, rdx`); // resto em rdx
   }
 
   emitNeg(dest, src) {
@@ -968,23 +968,23 @@ class CodeGenerator {
   emitCall(dest, funcName, args) {
     const paramRegs = ['rcx', 'rdx', 'r8', 'r9'];
 
-    // Set unused param registers to sentinel (so default param detection works with falsy values)
+    // Define registradores de parâmetros não usados como sentinela (para que detecção de parâmetro padrão funcione com valores falsy)
     for (let i = 0; i < 4; i++) {
       this.instr(`mov ${paramRegs[i]}, UNDEF_SENTINEL`);
     }
 
-    // Load args into registers (first 4)
+    // Carrega argumentos nos registradores (primeiros 4)
     for (let i = 0; i < args.length && i < 4; i++) {
       this.instr(`mov ${paramRegs[i]}, ${this.loc(args[i].temp)}`);
     }
 
-    // Push extra args to stack (>4, right-to-left per Windows x64 ABI)
+    // Empilha argumentos extras na stack (>4, da direita para a esquerda conforme ABI Windows x64)
     let extraStackSize = 0;
     if (args.length > 4) {
-      // Align to 16 bytes if odd number of extra args
+      // Alinha a 16 bytes se número ímpar de args extras
       const extraArgs = args.length - 4;
       if (extraArgs % 2 !== 0) {
-        this.instr('sub rsp, 8'); // padding for alignment
+        this.instr('sub rsp, 8'); // preenchimento para alinhamento
         extraStackSize += 8;
       }
       for (let i = args.length - 1; i >= 4; i--) {
@@ -993,7 +993,7 @@ class CodeGenerator {
       }
     }
 
-    // Shadow space + call
+    // Shadow space + chamada
     this.instr('sub rsp, 32');
     this.instr(`call func_${funcName}`);
     this.instr(`add rsp, ${32 + extraStackSize}`);
@@ -1057,13 +1057,13 @@ class CodeGenerator {
   }
 
   emitStrCmp(dest, setInstr, left, right) {
-    this.comment('string comparison');
+    this.comment('comparação de strings');
     this.instr('sub rsp, 32');
     this.instr(`mov rcx, ${this.loc(left)}`);
     this.instr(`mov rdx, ${this.loc(right)}`);
     this.instr('call strcmp');
     this.instr('add rsp, 32');
-    // strcmp returns <0, 0, or >0
+    // strcmp retorna <0, 0, ou >0
     this.instr(`${setInstr} al`);
     this.instr('movzx rax, al');
     this.instr(`mov ${this.loc(dest)}, rax`);
@@ -1074,7 +1074,7 @@ class CodeGenerator {
   }
 }
 
-// Mixin extracted methods onto prototype
+// Mistura métodos extraídos no prototype
 const emitHelpers = require('./codegen/emit-helpers');
 const emitIo      = require('./codegen/emit-io');
 const emitStrings = require('./codegen/emit-strings');

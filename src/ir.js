@@ -1,14 +1,14 @@
 'use strict';
 
-// Three-Address Code (TAC) IR node types
+// Tipos de nó IR de código de três endereços (TAC)
 
 class IRProgram {
   constructor() {
     this.functions = [];    // IRFunction[]
-    this.main = [];         // IRInstruction[] (top-level code)
+    this.main = [];         // IRInstruction[] (código de nível superior)
     this.strings = [];      // { label: string, value: string }[]
     this.floats = [];       // { label: string, value: number }[]
-    this.globals = new Set(); // global variable names
+    this.globals = new Set(); // nomes de variáveis globais
   }
 
   addString(value) {
@@ -33,209 +33,209 @@ class IRFunction {
     this.name = name;        // string
     this.params = params;    // string[]
     this.body = [];          // IRInstruction[]
-    this.locals = [];        // string[] (all local variable names)
+    this.locals = [];        // string[] (todos os nomes de variáveis locais)
   }
 }
 
-// IR instruction opcodes
+// Opcodes de instrução IR
 const OP = {
-  // Constants
-  LOAD_INT: 'LOAD_INT',         // dest, value
-  LOAD_FLOAT: 'LOAD_FLOAT',     // dest, label
-  LOAD_STRING: 'LOAD_STRING',   // dest, label
-  LOAD_BOOL: 'LOAD_BOOL',       // dest, value (0 or 1)
-  LOAD_NULL: 'LOAD_NULL',       // dest
-  LOAD_UNDEFINED: 'LOAD_UNDEFINED', // dest
+  // Constantes
+  LOAD_INT: 'LOAD_INT',         // destino, valor
+  LOAD_FLOAT: 'LOAD_FLOAT',     // destino, rótulo
+  LOAD_STRING: 'LOAD_STRING',   // destino, rótulo
+  LOAD_BOOL: 'LOAD_BOOL',       // destino, valor (0 ou 1)
+  LOAD_NULL: 'LOAD_NULL',       // destino
+  LOAD_UNDEFINED: 'LOAD_UNDEFINED', // destino
 
-  // Variables
-  LOAD_VAR: 'LOAD_VAR',         // dest, varName
-  STORE_VAR: 'STORE_VAR',       // varName, src
+  // Variáveis
+  LOAD_VAR: 'LOAD_VAR',         // destino, nomeVar
+  STORE_VAR: 'STORE_VAR',       // nomeVar, origem
 
-  // Arithmetic
-  ADD: 'ADD',                    // dest, left, right
-  SUB: 'SUB',                    // dest, left, right
-  MUL: 'MUL',                    // dest, left, right
-  DIV: 'DIV',                    // dest, left, right
-  MOD: 'MOD',                    // dest, left, right
-  POW: 'POW',                    // dest, left, right
-  NEG: 'NEG',                    // dest, src
+  // Aritmética
+  ADD: 'ADD',                    // destino, esquerda, direita
+  SUB: 'SUB',                    // destino, esquerda, direita
+  MUL: 'MUL',                    // destino, esquerda, direita
+  DIV: 'DIV',                    // destino, esquerda, direita
+  MOD: 'MOD',                    // destino, esquerda, direita
+  POW: 'POW',                    // destino, esquerda, direita
+  NEG: 'NEG',                    // destino, origem
 
-  // Comparison
-  CMP_EQ: 'CMP_EQ',             // dest, left, right (==)
-  CMP_SEQ: 'CMP_SEQ',           // dest, left, right (===)
-  CMP_NE: 'CMP_NE',             // dest, left, right (!=)
-  CMP_SNE: 'CMP_SNE',           // dest, left, right (!==)
-  CMP_LT: 'CMP_LT',             // dest, left, right (<)
-  CMP_GT: 'CMP_GT',             // dest, left, right (>)
-  CMP_LE: 'CMP_LE',             // dest, left, right (<=)
-  CMP_GE: 'CMP_GE',             // dest, left, right (>=)
+  // Comparação
+  CMP_EQ: 'CMP_EQ',             // destino, esquerda, direita (==)
+  CMP_SEQ: 'CMP_SEQ',           // destino, esquerda, direita (===)
+  CMP_NE: 'CMP_NE',             // destino, esquerda, direita (!=)
+  CMP_SNE: 'CMP_SNE',           // destino, esquerda, direita (!==)
+  CMP_LT: 'CMP_LT',             // destino, esquerda, direita (<)
+  CMP_GT: 'CMP_GT',             // destino, esquerda, direita (>)
+  CMP_LE: 'CMP_LE',             // destino, esquerda, direita (<=)
+  CMP_GE: 'CMP_GE',             // destino, esquerda, direita (>=)
 
-  // Logical
-  NOT: 'NOT',                    // dest, src
-  AND: 'AND',                    // dest, left, right (short-circuit)
-  OR: 'OR',                      // dest, left, right (short-circuit)
+  // Lógico
+  NOT: 'NOT',                    // destino, origem
+  AND: 'AND',                    // destino, esquerda, direita (curto-circuito)
+  OR: 'OR',                      // destino, esquerda, direita (curto-circuito)
 
-  // Control flow
-  LABEL: 'LABEL',               // label
-  JUMP: 'JUMP',                 // label
-  JUMP_IF_FALSE: 'JUMP_IF_FALSE', // src, label
-  JUMP_IF_TRUE: 'JUMP_IF_TRUE',   // src, label
+  // Fluxo de controle
+  LABEL: 'LABEL',               // rótulo
+  JUMP: 'JUMP',                 // rótulo
+  JUMP_IF_FALSE: 'JUMP_IF_FALSE', // origem, rótulo
+  JUMP_IF_TRUE: 'JUMP_IF_TRUE',   // origem, rótulo
 
-  // Functions
-  CALL: 'CALL',                  // dest, funcName, args[]
-  RETURN: 'RETURN',              // src (optional)
-  PARAM: 'PARAM',               // paramName, index
+  // Funções
+  CALL: 'CALL',                  // destino, nomeFunção, args[]
+  RETURN: 'RETURN',              // origem (opcional)
+  PARAM: 'PARAM',               // nomeParâmetro, índice
 
-  // Builtins
-  CONSOLE_LOG: 'CONSOLE_LOG',   // args[] (with type hints)
+  // Embutidos
+  CONSOLE_LOG: 'CONSOLE_LOG',   // args[] (com dicas de tipo)
 
   // Strings
-  STR_CONCAT: 'STR_CONCAT',     // dest, left, right
-  STR_LENGTH: 'STR_LENGTH',     // dest, src
+  STR_CONCAT: 'STR_CONCAT',     // destino, esquerda, direita
+  STR_LENGTH: 'STR_LENGTH',     // destino, origem
 
   // Arrays
-  ARRAY_NEW: 'ARRAY_NEW',       // dest, elements[]
-  ARRAY_GET: 'ARRAY_GET',       // dest, array, index
-  ARRAY_SET: 'ARRAY_SET',       // array, index, value
-  ARRAY_PUSH: 'ARRAY_PUSH',     // array, value
-  ARRAY_LENGTH: 'ARRAY_LENGTH', // dest, array
+  ARRAY_NEW: 'ARRAY_NEW',       // destino, elementos[]
+  ARRAY_GET: 'ARRAY_GET',       // destino, array, índice
+  ARRAY_SET: 'ARRAY_SET',       // array, índice, valor
+  ARRAY_PUSH: 'ARRAY_PUSH',     // array, valor
+  ARRAY_LENGTH: 'ARRAY_LENGTH', // destino, array
 
   // Template literals
-  TEMPLATE: 'TEMPLATE',         // dest, parts[] (strings and expressions interleaved)
+  TEMPLATE: 'TEMPLATE',         // destino, partes[] (strings e expressões intercaladas)
 
-  // Assignment operators
-  ASSIGN_ADD: 'ASSIGN_ADD',     // varName, src
-  ASSIGN_SUB: 'ASSIGN_SUB',     // varName, src
+  // Operadores de atribuição
+  ASSIGN_ADD: 'ASSIGN_ADD',     // nomeVar, origem
+  ASSIGN_SUB: 'ASSIGN_SUB',     // nomeVar, origem
 
-  // Builtins - console.error, process.exit
-  CONSOLE_ERROR: 'CONSOLE_ERROR', // args[] (with type hints) — prints to stderr
-  PROCESS_EXIT: 'PROCESS_EXIT',   // exitCode temp
+  // Embutidos - console.error, process.exit
+  CONSOLE_ERROR: 'CONSOLE_ERROR', // args[] (com dicas de tipo) — imprime no stderr
+  PROCESS_EXIT: 'PROCESS_EXIT',   // temp códigoSaída
 
-  // Math builtins
-  MATH_ABS: 'MATH_ABS',         // dest, src
-  MATH_MAX: 'MATH_MAX',         // dest, left, right
-  MATH_MIN: 'MATH_MIN',         // dest, left, right
-  MATH_FLOOR: 'MATH_FLOOR',     // dest, src (float → int)
-  MATH_SQRT: 'MATH_SQRT',       // dest, src (float → float)
-  MATH_POW: 'MATH_POW',         // dest, base, exp (int only for now)
-  MATH_ROUND: 'MATH_ROUND',     // dest, src
-  MATH_CEIL: 'MATH_CEIL',       // dest, src
-  MATH_TRUNC: 'MATH_TRUNC',     // dest, src
-  MATH_SIGN: 'MATH_SIGN',       // dest, src
-  MATH_RANDOM: 'MATH_RANDOM',   // dest
-  MATH_LOG: 'MATH_LOG',         // dest, src
-  MATH_LOG2: 'MATH_LOG2',       // dest, src
-  MATH_SIN: 'MATH_SIN',         // dest, src
-  MATH_COS: 'MATH_COS',         // dest, src
-  MATH_TAN: 'MATH_TAN',         // dest, src
-  MATH_ATAN2: 'MATH_ATAN2',     // dest, y, x
-  MATH_CLAMP32: 'MATH_CLAMP32', // dest, src (Math.clz32)
+  // Embutidos de Math
+  MATH_ABS: 'MATH_ABS',         // destino, origem
+  MATH_MAX: 'MATH_MAX',         // destino, esquerda, direita
+  MATH_MIN: 'MATH_MIN',         // destino, esquerda, direita
+  MATH_FLOOR: 'MATH_FLOOR',     // destino, origem (float → int)
+  MATH_SQRT: 'MATH_SQRT',       // destino, origem (float → float)
+  MATH_POW: 'MATH_POW',         // destino, base, exp (apenas int por enquanto)
+  MATH_ROUND: 'MATH_ROUND',     // destino, origem
+  MATH_CEIL: 'MATH_CEIL',       // destino, origem
+  MATH_TRUNC: 'MATH_TRUNC',     // destino, origem
+  MATH_SIGN: 'MATH_SIGN',       // destino, origem
+  MATH_RANDOM: 'MATH_RANDOM',   // destino
+  MATH_LOG: 'MATH_LOG',         // destino, origem
+  MATH_LOG2: 'MATH_LOG2',       // destino, origem
+  MATH_SIN: 'MATH_SIN',         // destino, origem
+  MATH_COS: 'MATH_COS',         // destino, origem
+  MATH_TAN: 'MATH_TAN',         // destino, origem
+  MATH_ATAN2: 'MATH_ATAN2',     // destino, y, x
+  MATH_CLAMP32: 'MATH_CLAMP32', // destino, origem (Math.clz32)
 
   // String extra
-  STR_CHAR_CODE_AT: 'STR_CHAR_CODE_AT',       // dest, str, index
-  STR_FROM_CHAR_CODE: 'STR_FROM_CHAR_CODE',   // dest, code
-  STR_PAD_START: 'STR_PAD_START',             // dest, str, targetLen, padStr
-  STR_PAD_END: 'STR_PAD_END',                 // dest, str, targetLen, padStr
-  STR_TRIM_START: 'STR_TRIM_START',           // dest, str
-  STR_TRIM_END: 'STR_TRIM_END',               // dest, str
-  STR_REPLACE_ALL: 'STR_REPLACE_ALL',         // dest, str, search, replacement
+  STR_CHAR_CODE_AT: 'STR_CHAR_CODE_AT',       // destino, str, índice
+  STR_FROM_CHAR_CODE: 'STR_FROM_CHAR_CODE',   // destino, código
+  STR_PAD_START: 'STR_PAD_START',             // destino, str, tamanhoAlvo, strPreenchimento
+  STR_PAD_END: 'STR_PAD_END',                 // destino, str, tamanhoAlvo, strPreenchimento
+  STR_TRIM_START: 'STR_TRIM_START',           // destino, str
+  STR_TRIM_END: 'STR_TRIM_END',               // destino, str
+  STR_REPLACE_ALL: 'STR_REPLACE_ALL',         // destino, str, busca, substituição
 
-  // Number builtins
-  NUM_IS_INTEGER: 'NUM_IS_INTEGER', // dest, src
-  NUM_IS_FINITE: 'NUM_IS_FINITE',   // dest, src
-  NUM_TO_FIXED: 'NUM_TO_FIXED',     // dest, src, digits
+  // Embutidos de Number
+  NUM_IS_INTEGER: 'NUM_IS_INTEGER', // destino, origem
+  NUM_IS_FINITE: 'NUM_IS_FINITE',   // destino, origem
+  NUM_TO_FIXED: 'NUM_TO_FIXED',     // destino, origem, dígitos
 
   // Array extra
-  ARRAY_SPLICE: 'ARRAY_SPLICE',   // dest, array, start, deleteCount, ...items
-  ARRAY_FILL: 'ARRAY_FILL',       // dest, array, value, start, end
-  ARRAY_FLAT: 'ARRAY_FLAT',       // dest, array
+  ARRAY_SPLICE: 'ARRAY_SPLICE',   // destino, array, início, contRemover, ...itens
+  ARRAY_FILL: 'ARRAY_FILL',       // destino, array, valor, início, fim
+  ARRAY_FLAT: 'ARRAY_FLAT',       // destino, array
 
   // typeof
-  TYPEOF: 'TYPEOF',             // dest, src, typeHint
+  TYPEOF: 'TYPEOF',             // destino, origem, dicaTipo
 
-  // Bitwise
-  BIT_AND: 'BIT_AND',           // dest, left, right
-  BIT_OR: 'BIT_OR',             // dest, left, right
-  BIT_XOR: 'BIT_XOR',           // dest, left, right
-  BIT_NOT: 'BIT_NOT',           // dest, src
-  SHL: 'SHL',                    // dest, left, right
-  SHR: 'SHR',                    // dest, left, right
-  USHR: 'USHR',                  // dest, left, right (unsigned)
+  // Bit a bit
+  BIT_AND: 'BIT_AND',           // destino, esquerda, direita
+  BIT_OR: 'BIT_OR',             // destino, esquerda, direita
+  BIT_XOR: 'BIT_XOR',           // destino, esquerda, direita
+  BIT_NOT: 'BIT_NOT',           // destino, origem
+  SHL: 'SHL',                    // destino, esquerda, direita
+  SHR: 'SHR',                    // destino, esquerda, direita
+  USHR: 'USHR',                  // destino, esquerda, direita (sem sinal)
 
-  // Increment/decrement
-  PRE_INC: 'PRE_INC',           // dest, varName
-  PRE_DEC: 'PRE_DEC',           // dest, varName
-  POST_INC: 'POST_INC',         // dest, varName
-  POST_DEC: 'POST_DEC',         // dest, varName
+  // Incremento/decremento
+  PRE_INC: 'PRE_INC',           // destino, nomeVar
+  PRE_DEC: 'PRE_DEC',           // destino, nomeVar
+  POST_INC: 'POST_INC',         // destino, nomeVar
+  POST_DEC: 'POST_DEC',         // destino, nomeVar
 
-  // Default params
-  JUMP_IF_NOT_UNDEF: 'JUMP_IF_NOT_UNDEF', // src, label  (skip if param was provided)
+  // Parâmetros padrão
+  JUMP_IF_NOT_UNDEF: 'JUMP_IF_NOT_UNDEF', // origem, rótulo  (pular se o parâmetro foi fornecido)
 
-  // String methods
-  STR_CHAR_AT: 'STR_CHAR_AT',       // dest, str, index
-  STR_INDEX_OF: 'STR_INDEX_OF',     // dest, str, search
-  STR_TO_UPPER: 'STR_TO_UPPER',     // dest, str
-  STR_TO_LOWER: 'STR_TO_LOWER',     // dest, str
-  STR_INCLUDES: 'STR_INCLUDES',     // dest, str, search
-  STR_TRIM: 'STR_TRIM',             // dest, str
+  // Métodos de String
+  STR_CHAR_AT: 'STR_CHAR_AT',       // destino, str, índice
+  STR_INDEX_OF: 'STR_INDEX_OF',     // destino, str, busca
+  STR_TO_UPPER: 'STR_TO_UPPER',     // destino, str
+  STR_TO_LOWER: 'STR_TO_LOWER',     // destino, str
+  STR_INCLUDES: 'STR_INCLUDES',     // destino, str, busca
+  STR_TRIM: 'STR_TRIM',             // destino, str
 
-  // Objects
-  OBJ_NEW: 'OBJ_NEW',               // dest, keys[], values[]
-  OBJ_GET: 'OBJ_GET',               // dest, obj, keyLabel
-  OBJ_SET: 'OBJ_SET',               // obj, keyLabel, value
+  // Objetos
+  OBJ_NEW: 'OBJ_NEW',               // destino, chaves[], valores[]
+  OBJ_GET: 'OBJ_GET',               // destino, obj, rótuloChave
+  OBJ_SET: 'OBJ_SET',               // obj, rótuloChave, valor
 
-  // Rest params
-  REST_ARGS: 'REST_ARGS',           // dest, startIndex, totalArgCount
+  // Parâmetros rest
+  REST_ARGS: 'REST_ARGS',           // destino, índiceInício, contTotalArgs
 
   // Spread
-  ARRAY_SPREAD: 'ARRAY_SPREAD',     // destArray, srcArray — copy all elements from src to dest
-  OBJ_SPREAD: 'OBJ_SPREAD',         // destObj, srcObj — copy all properties from src to dest
-  CALL_SPREAD: 'CALL_SPREAD',       // dest, funcName, normalArgs[], spreadArray
+  ARRAY_SPREAD: 'ARRAY_SPREAD',     // arrayDestino, arrayOrigem — copiar todos os elementos da origem para o destino
+  OBJ_SPREAD: 'OBJ_SPREAD',         // objDestino, objOrigem — copiar todas as propriedades da origem para o destino
+  CALL_SPREAD: 'CALL_SPREAD',       // destino, nomeFunção, argsNormais[], arraySpread
 
-  // Exceptions
-  TRY_PUSH: 'TRY_PUSH',             // handlerLabel — push exception handler
-  TRY_POP: 'TRY_POP',               // — pop exception handler (normal path)
-  THROW: 'THROW',                    // valueTemp — throw exception
+  // Exceções
+  TRY_PUSH: 'TRY_PUSH',             // rótuloHandler — empilhar manipulador de exceção
+  TRY_POP: 'TRY_POP',               // — desempilhar manipulador de exceção (caminho normal)
+  THROW: 'THROW',                    // tempValor — lançar exceção
 
   // Classes
-  OBJ_NEW_EMPTY: 'OBJ_NEW_EMPTY',   // dest — create empty object
+  OBJ_NEW_EMPTY: 'OBJ_NEW_EMPTY',   // destino — criar objeto vazio
 
-  // Array methods
-  ARRAY_POP: 'ARRAY_POP',             // dest, array
-  ARRAY_SHIFT: 'ARRAY_SHIFT',         // dest, array
-  ARRAY_UNSHIFT: 'ARRAY_UNSHIFT',     // array, value, type
-  ARRAY_INDEX_OF: 'ARRAY_INDEX_OF',   // dest, array, value
-  ARRAY_INCLUDES: 'ARRAY_INCLUDES',   // dest, array, value
-  ARRAY_JOIN: 'ARRAY_JOIN',           // dest, array, separator
-  ARRAY_SLICE: 'ARRAY_SLICE',         // dest, array, start, end
-  ARRAY_REVERSE: 'ARRAY_REVERSE',     // dest, array
-  ARRAY_CONCAT: 'ARRAY_CONCAT',       // dest, array1, array2
+  // Métodos de Array
+  ARRAY_POP: 'ARRAY_POP',             // destino, array
+  ARRAY_SHIFT: 'ARRAY_SHIFT',         // destino, array
+  ARRAY_UNSHIFT: 'ARRAY_UNSHIFT',     // array, valor, tipo
+  ARRAY_INDEX_OF: 'ARRAY_INDEX_OF',   // destino, array, valor
+  ARRAY_INCLUDES: 'ARRAY_INCLUDES',   // destino, array, valor
+  ARRAY_JOIN: 'ARRAY_JOIN',           // destino, array, separador
+  ARRAY_SLICE: 'ARRAY_SLICE',         // destino, array, início, fim
+  ARRAY_REVERSE: 'ARRAY_REVERSE',     // destino, array
+  ARRAY_CONCAT: 'ARRAY_CONCAT',       // destino, array1, array2
 
-  // String methods
-  STR_SLICE: 'STR_SLICE',             // dest, str, start, end
-  STR_SPLIT: 'STR_SPLIT',             // dest, str, separator
-  STR_REPLACE: 'STR_REPLACE',         // dest, str, search, replacement
-  STR_REPEAT: 'STR_REPEAT',           // dest, str, count
-  STR_STARTS_WITH: 'STR_STARTS_WITH', // dest, str, prefix
-  STR_ENDS_WITH: 'STR_ENDS_WITH',     // dest, str, suffix
-  STR_SUBSTRING: 'STR_SUBSTRING',     // dest, str, start, end
+  // Métodos de String
+  STR_SLICE: 'STR_SLICE',             // destino, str, início, fim
+  STR_SPLIT: 'STR_SPLIT',             // destino, str, separador
+  STR_REPLACE: 'STR_REPLACE',         // destino, str, busca, substituição
+  STR_REPEAT: 'STR_REPEAT',           // destino, str, contagem
+  STR_STARTS_WITH: 'STR_STARTS_WITH', // destino, str, prefixo
+  STR_ENDS_WITH: 'STR_ENDS_WITH',     // destino, str, sufixo
+  STR_SUBSTRING: 'STR_SUBSTRING',     // destino, str, início, fim
 
-  // Object methods
-  OBJ_KEYS: 'OBJ_KEYS',               // dest, obj
-  OBJ_VALUES: 'OBJ_VALUES',           // dest, obj
-  OBJ_ENTRIES: 'OBJ_ENTRIES',         // dest, obj
-  OBJ_HAS_OWN: 'OBJ_HAS_OWN',       // dest, obj, keyLabel
-  OBJ_DELETE: 'OBJ_DELETE',           // obj, keyLabel
+  // Métodos de Object
+  OBJ_KEYS: 'OBJ_KEYS',               // destino, obj
+  OBJ_VALUES: 'OBJ_VALUES',           // destino, obj
+  OBJ_ENTRIES: 'OBJ_ENTRIES',         // destino, obj
+  OBJ_HAS_OWN: 'OBJ_HAS_OWN',       // destino, obj, rótuloChave
+  OBJ_DELETE: 'OBJ_DELETE',           // obj, rótuloChave
 
-  // Type conversion builtins
-  PARSE_INT: 'PARSE_INT',             // dest, str
-  PARSE_FLOAT: 'PARSE_FLOAT',         // dest, str
-  TO_STRING: 'TO_STRING',             // dest, value
-  IS_NAN: 'IS_NAN',                   // dest, value
-  ARRAY_IS_ARRAY: 'ARRAY_IS_ARRAY',   // dest, value
+  // Embutidos de conversão de tipo
+  PARSE_INT: 'PARSE_INT',             // destino, str
+  PARSE_FLOAT: 'PARSE_FLOAT',         // destino, str
+  TO_STRING: 'TO_STRING',             // destino, valor
+  IS_NAN: 'IS_NAN',                   // destino, valor
+  ARRAY_IS_ARRAY: 'ARRAY_IS_ARRAY',   // destino, valor
 
-  // String comparison
-  STR_CMP: 'STR_CMP',                 // dest, setInstr, left, right
+  // Comparação de String
+  STR_CMP: 'STR_CMP',                 // destino, instrSet, esquerda, direita
 };
 
 class IRInstruction {

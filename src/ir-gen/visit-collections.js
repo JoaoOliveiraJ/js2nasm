@@ -4,7 +4,7 @@ const { OP } = require('../ir');
 const { TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_ARRAY } = require('../types');
 
 function visitMemberExpression(node) {
-  // Math constants: Math.PI, Math.E
+  // Constantes Math: Math.PI, Math.E
   if (!node.computed && node.object.type === 'Identifier' && node.object.name === 'Math' &&
       node.property.type === 'Identifier') {
     const mathConstants = {
@@ -26,16 +26,16 @@ function visitMemberExpression(node) {
     }
   }
 
-  // Number constants: Number.MAX_SAFE_INTEGER, etc.
+  // Constantes Number: Number.MAX_SAFE_INTEGER, etc.
   if (!node.computed && node.object.type === 'Identifier' && node.object.name === 'Number' &&
       node.property.type === 'Identifier') {
     const numberConstants = {
       'MAX_SAFE_INTEGER': 9007199254740991,
       'MIN_SAFE_INTEGER': -9007199254740991,
-      'MAX_VALUE': 9007199254740991,  // approximate for int
+      'MAX_VALUE': 9007199254740991,  // aproximação para int
       'POSITIVE_INFINITY': 9007199254740991,
       'NEGATIVE_INFINITY': -9007199254740991,
-      'EPSILON': 0,  // no float precision concept for ints
+      'EPSILON': 0,  // sem conceito de precisão float para ints
     };
     const val = numberConstants[node.property.name];
     if (val !== undefined) {
@@ -45,7 +45,7 @@ function visitMemberExpression(node) {
     }
   }
 
-  // .length property
+  // Propriedade .length
   if (!node.computed && node.property.type === 'Identifier' && node.property.name === 'length') {
     const { temp: objTemp, type } = this.visitExpression(node.object);
     const t = this.newTemp();
@@ -57,16 +57,16 @@ function visitMemberExpression(node) {
     return { temp: t, type: TYPE_INT };
   }
 
-  // Computed access: arr[i] or obj["key"]
+  // Acesso computado: arr[i] ou obj["key"]
   if (node.computed) {
     const { temp: objTemp } = this.visitExpression(node.object);
     const prop = node.property;
-    // String key → object property access
+    // Chave string → acesso de propriedade de objeto
     if (prop.type === 'Literal' && typeof prop.value === 'string') {
       const keyLabel = this.program.addString(prop.value);
       const t = this.newTemp();
       this.emit(OP.OBJ_GET, t, objTemp, keyLabel);
-      // Try to infer type from known object property types
+      // Tenta inferir tipo a partir de tipos de propriedade conhecidos
       let propType = TYPE_INT;
       if (node.object.type === 'Identifier') {
         const info = this.analyzer.currentScope.lookup(node.object.name);
@@ -76,20 +76,20 @@ function visitMemberExpression(node) {
       }
       return { temp: t, type: propType };
     }
-    // Numeric index → array access
+    // Índice numérico → acesso de array
     const { temp: idxTemp } = this.visitExpression(prop);
     const t = this.newTemp();
     this.emit(OP.ARRAY_GET, t, objTemp, idxTemp);
-    // Infer element type from known array element types
+    // Infere tipo do elemento a partir de tipos de elementos conhecidos do array
     let elemType = TYPE_INT;
     if (node.object.type === 'Identifier') {
       const info = this.analyzer.currentScope.lookup(node.object.name);
       if (info && info.elemTypes) {
-        // If index is a literal number, use exact type
+        // Se índice é número literal, usa tipo exato
         if (prop.type === 'Literal' && typeof prop.value === 'number' && info.elemTypes[prop.value] !== undefined) {
           elemType = info.elemTypes[prop.value];
         } else if (info.elemTypes.length > 0) {
-          // If all elements same type, use that; otherwise default to INT
+          // Se todos os elementos são do mesmo tipo, usa esse; senão default para INT
           const allSame = info.elemTypes.every(t => t === info.elemTypes[0]);
           if (allSame) elemType = info.elemTypes[0];
         }
@@ -98,9 +98,9 @@ function visitMemberExpression(node) {
     return { temp: t, type: elemType };
   }
 
-  // Non-computed property access: obj.prop
+  // Acesso de propriedade não-computado: obj.prop
   if (!node.computed && node.property.type === 'Identifier') {
-    // Check if this is a getter access on a class instance
+    // Checa se é acesso a getter em instância de classe
     if (node.object.type === 'Identifier') {
       const info = this.analyzer.currentScope.lookup(node.object.name);
       if (info && info.className && this._isGetter(info.className, node.property.name)) {
@@ -114,7 +114,7 @@ function visitMemberExpression(node) {
         return { temp: t, type: TYPE_INT };
       }
     }
-    // Check if this.prop is a getter
+    // Checa se this.prop é um getter
     if (node.object.type === 'Identifier' && node.object.name === 'this') {
       const thisInfo = this.analyzer.currentScope.lookup('this');
       if (thisInfo && thisInfo.className && this._isGetter(thisInfo.className, node.property.name)) {
@@ -133,7 +133,7 @@ function visitMemberExpression(node) {
     const keyLabel = this.program.addString(node.property.name);
     const t = this.newTemp();
     this.emit(OP.OBJ_GET, t, objTemp, keyLabel);
-    // Try to infer type from known object property types
+    // Tenta inferir tipo a partir de tipos de propriedade conhecidos
     let propType = TYPE_INT;
     if (node.object.type === 'Identifier') {
       const info = this.analyzer.currentScope.lookup(node.object.name);
@@ -150,7 +150,7 @@ function visitMemberExpression(node) {
 function visitObjectExpression(node) {
   const hasSpread = node.properties.some(p => p.type === 'SpreadElement');
 
-  // Check for computed keys or method shorthand that need dynamic handling
+  // Checa chaves computadas ou shorthand de método que precisam de tratamento dinâmico
   const needsDynamic = hasSpread || node.properties.some(p =>
     p.type !== 'SpreadElement' && (p.computed || p.method)
   );
@@ -158,13 +158,13 @@ function visitObjectExpression(node) {
   if (!needsDynamic) {
     const keys = [];
     const values = [];
-    const propTypes = {}; // key → type mapping for type tracking
+    const propTypes = {}; // mapeamento chave → tipo para rastreamento de tipo
     for (const prop of node.properties) {
-      // Get key name
+      // Pega nome da chave
       const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
       const keyLabel = this.program.addString(keyName);
       keys.push(keyLabel);
-      // Property shorthand: { x } → { x: x }
+      // Shorthand de propriedade: { x } → { x: x }
       if (prop.shorthand) {
         const { temp, type } = this.visitExpression(prop.key);
         values.push(temp);
@@ -177,10 +177,10 @@ function visitObjectExpression(node) {
     }
     const t = this.newTemp();
     this.emit(OP.OBJ_NEW, t, keys, values);
-    return { temp: t, type: TYPE_INT, propTypes }; // TYPE_INT as generic pointer
+    return { temp: t, type: TYPE_INT, propTypes }; // TYPE_INT como ponteiro genérico
   }
 
-  // Dynamic: has spread, computed keys, or method shorthand
+  // Dinâmico: tem spread, chaves computadas ou shorthand de método
   const t = this.newTemp();
   this.emit(OP.OBJ_NEW, t, [], []);
   const propTypes = {};
@@ -189,18 +189,18 @@ function visitObjectExpression(node) {
       const { temp: srcObj } = this.visitExpression(prop.argument);
       this.emit(OP.OBJ_SPREAD, t, srcObj);
     } else if (prop.computed) {
-      // Computed key: { [expr]: val }
+      // Chave computada: { [expr]: val }
       const { temp: keyTemp, type: keyType } = this.visitExpression(prop.key);
-      // Convert key to string if it's not already
+      // Converte chave para string se ainda não for
       let keyLabel;
       if (prop.key.type === 'Literal' && typeof prop.key.value === 'string') {
         keyLabel = this.program.addString(prop.key.value);
       } else {
-        // Dynamic key — convert to string and use OBJ_SET with the string
+        // Chave dinâmica — converte para string e usa OBJ_SET com a string
         const keyStr = this.newTemp();
         if (keyType === TYPE_STRING) {
-          // Already a string pointer, use it directly with a dynamic approach
-          // We need OBJ_SET to accept string pointers too — for now convert
+          // Já é um ponteiro de string, usa diretamente com abordagem dinâmica
+          // Precisamos que OBJ_SET aceite ponteiros de string também — por enquanto converte
           keyLabel = null;
         } else {
           keyLabel = null;
@@ -210,13 +210,13 @@ function visitObjectExpression(node) {
       if (keyLabel) {
         this.emit(OP.OBJ_SET, t, keyLabel, valTemp);
       } else {
-        // For dynamic keys, convert to string and use OBJ_SET
-        // Since our OBJ_SET expects a label, we'll use the key expression value
-        // as a runtime string pointer
+        // Para chaves dinâmicas, converte para string e usa OBJ_SET
+        // Como nosso OBJ_SET espera um label, vamos usar o valor da expressão da chave
+        // como ponteiro de string em runtime
         this.emit(OP.OBJ_SET, t, keyTemp, valTemp);
       }
     } else if (prop.method) {
-      // Method shorthand: { foo() {} } → { foo: function() {} }
+      // Shorthand de método: { foo() {} } → { foo: function() {} }
       const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
       const keyLabel = this.program.addString(keyName);
       const { temp: valTemp, type: valType } = this.visitExpression(prop.value);
@@ -254,7 +254,7 @@ function visitArrayExpression(node) {
     return { temp: t, type: TYPE_ARRAY, elemTypes };
   }
 
-  // Has spread: create empty array, then push/spread each element
+  // Tem spread: cria array vazio, depois push/spread cada elemento
   const t = this.newTemp();
   this.emit(OP.ARRAY_NEW, t, []);
   for (const elem of node.elements) {
@@ -271,7 +271,7 @@ function visitArrayExpression(node) {
 }
 
 function visitTemplateLiteral(node) {
-  // Build parts: alternating quasis (strings) and expressions
+  // Constrói partes: alternando quasis (strings) e expressões
   const parts = [];
   for (let i = 0; i < node.quasis.length; i++) {
     const quasi = node.quasis[i];

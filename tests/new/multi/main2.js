@@ -1,4 +1,4 @@
-// expected: 25\n27\n3
+// esperado: 25\n27\n3
 import { square, cube, PI_APPROX } from './math.js';
 
 console.log(square(5));

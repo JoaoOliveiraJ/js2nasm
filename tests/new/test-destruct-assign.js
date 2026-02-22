@@ -1,10 +1,10 @@
-// Test destructuring assignment (swap)
+// Testa atribuição com destructuring (troca)
 let a = 1;
 let b = 2;
 [a, b] = [b, a];
 console.log(a, b);
 
-// Test object destructuring assignment
+// Testa atribuição com destructuring de objeto
 let x = 0;
 let y = 0;
 const point = { x: 10, y: 20 };

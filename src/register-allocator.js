@@ -1,30 +1,30 @@
 'use strict';
 
-// Simple register allocator
-// For now, we use a stack-based approach (all temps live on the stack)
-// This is simpler and correct, though less performant than register allocation
+// Alocador de registradores simples
+// Por enquanto, usamos uma abordagem baseada em pilha (todos os temporários ficam na pilha)
+// Isso é mais simples e correto, embora menos performático que alocação de registradores
 
-// Available volatile registers for general use (caller-saved)
+// Registradores voláteis disponíveis para uso geral (salvos pelo chamador)
 const VOLATILE_REGS = ['rax', 'rcx', 'rdx', 'r8', 'r9', 'r10', 'r11'];
 
-// Callee-saved registers (must be preserved across calls)
+// Registradores salvos pelo chamado (devem ser preservados entre chamadas)
 const CALLEE_SAVED = ['rbx', 'rdi', 'rsi', 'r12', 'r13', 'r14', 'r15'];
 
-// Parameter registers (Microsoft x64 calling convention)
+// Registradores de parâmetro (convenção de chamada Microsoft x64)
 const PARAM_REGS = ['rcx', 'rdx', 'r8', 'r9'];
 
-// Float parameter registers
+// Registradores de parâmetro de ponto flutuante
 const FLOAT_PARAM_REGS = ['xmm0', 'xmm1', 'xmm2', 'xmm3'];
 
 class RegisterAllocator {
   constructor() {
-    this.allocations = new Map(); // temp → register or stack offset
+    this.allocations = new Map(); // temp → registrador ou deslocamento na pilha
   }
 
-  // For now, everything goes on the stack
-  // Future optimization: linear scan register allocation
+  // Por enquanto, tudo vai para a pilha
+  // Otimização futura: alocação de registradores por varredura linear
   allocate(temp) {
-    // Stack-based: each temp gets a stack slot
+    // Baseado em pilha: cada temporário recebe um slot na pilha
     return null;
   }
 }

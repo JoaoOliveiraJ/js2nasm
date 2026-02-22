@@ -1,6 +1,6 @@
-// expected: 1,2,3
-// expected: 3
-// expected: 5
+// esperado: 1,2,3
+// esperado: 3
+// esperado: 5
 let arr = [1, 2, 3];
 console.log(arr.join(","));
 let arr2 = arr.reverse();

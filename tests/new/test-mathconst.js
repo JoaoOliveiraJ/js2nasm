@@ -1,2 +1,2 @@
-// expected: 3.14159
+// esperado: 3.14159
 console.log(Math.PI);

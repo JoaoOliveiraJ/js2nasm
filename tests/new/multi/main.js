@@ -1,4 +1,4 @@
-// expected: 8\n6
+// esperado: 8\n6
 import { add, multiply } from './lib.js';
 
 const result1 = add(3, 5);

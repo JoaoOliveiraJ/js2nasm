@@ -1,4 +1,4 @@
-// expected: before\ncaught: 42\nafter
+// esperado: before\ncaught: 42\nafter
 console.log("before");
 try {
   throw 42;

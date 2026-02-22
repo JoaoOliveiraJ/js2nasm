@@ -7,12 +7,12 @@ function visitVariableDeclaration(node) {
   for (const decl of node.declarations) {
     const isConst = node.kind === 'const';
 
-    // Array destructuring: const [a, b] = expr
+    // Destructuring de array: const [a, b] = expr
     if (decl.id.type === 'ArrayPattern') {
       const { temp: arrTemp } = this.visitExpression(decl.init);
       for (let i = 0; i < decl.id.elements.length; i++) {
         const elem = decl.id.elements[i];
-        if (!elem) continue; // skip holes
+        if (!elem) continue; // pula buracos
 
         // RestElement: const [a, ...rest] = arr
         if (elem.type === 'RestElement') {
@@ -27,16 +27,16 @@ function visitVariableDeclaration(node) {
           this.analyzer.currentScope.declare(restName, { type: TYPE_ARRAY, isConst, qualifiedName: name });
           if (!this.inFunction) this.program.globals.add(name);
           this.emit(OP.STORE_VAR, name, restArr);
-          break; // rest must be last
+          break; // rest deve ser o último
         }
 
-        // AssignmentPattern: const [a = defaultVal] = arr — check bounds first
+        // AssignmentPattern: const [a = valorPadrao] = arr — checa limites primeiro
         if (elem.type === 'AssignmentPattern') {
           const elemName = elem.left.name;
           const name = (!this.inFunction && this.moduleId) ? this.qualifyName(elemName) : elemName;
           this.analyzer.currentScope.declare(elemName, { type: TYPE_INT, isConst, qualifiedName: name });
           if (!this.inFunction) this.program.globals.add(name);
-          // Check if index i is within array bounds
+          // Checa se índice i está dentro dos limites do array
           const lenTemp = this.newTemp();
           this.emit(OP.ARRAY_LENGTH, lenTemp, arrTemp);
           const idxTemp = this.newTemp();
@@ -46,11 +46,11 @@ function visitVariableDeclaration(node) {
           const useElemLabel = this.newLabel('arrdef_elem');
           const endDefLabel = this.newLabel('arrdef_end');
           this.emit(OP.JUMP_IF_TRUE, inBounds, useElemLabel);
-          // Out of bounds: use default
+          // Fora dos limites: usa default
           const { temp: defVal } = this.visitExpression(elem.right);
           this.emit(OP.STORE_VAR, name, defVal);
           this.emit(OP.JUMP, endDefLabel);
-          // In bounds: use array element
+          // Dentro dos limites: usa elemento do array
           this.emit(OP.LABEL, useElemLabel);
           const valTemp = this.newTemp();
           this.emit(OP.ARRAY_GET, valTemp, arrTemp, idxTemp);
@@ -64,7 +64,7 @@ function visitVariableDeclaration(node) {
         const valTemp = this.newTemp();
         this.emit(OP.ARRAY_GET, valTemp, arrTemp, idxTemp);
 
-        // Nested array destructuring: const [a, [b, c]] = arr
+        // Destructuring de array aninhado: const [a, [b, c]] = arr
         if (elem.type === 'ArrayPattern') {
           const tempName = `_nested_arr_${this.labelCounter++}`;
           this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
@@ -73,7 +73,7 @@ function visitVariableDeclaration(node) {
           continue;
         }
 
-        // Nested object destructuring: const [{ x }] = arr
+        // Destructuring de objeto aninhado: const [{ x }] = arr
         if (elem.type === 'ObjectPattern') {
           const tempName = `_nested_obj_${this.labelCounter++}`;
           this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
@@ -91,13 +91,13 @@ function visitVariableDeclaration(node) {
       continue;
     }
 
-    // Object destructuring: const { a, b } = expr
+    // Destructuring de objeto: const { a, b } = expr
     if (decl.id.type === 'ObjectPattern') {
       const { temp: objTemp } = this.visitExpression(decl.init);
       for (const prop of decl.id.properties) {
         // RestElement: const { a, ...rest } = obj
         if (prop.type === 'RestElement') {
-          // Not yet supported — skip
+          // Ainda não suportado — pula
           continue;
         }
 
@@ -108,30 +108,30 @@ function visitVariableDeclaration(node) {
 
         const target = prop.value || prop.key;
 
-        // Default value: const { x = 10 } = obj — check key existence
+        // Valor padrão: const { x = 10 } = obj — checa existência da chave
         if (target.type === 'AssignmentPattern') {
           const localName = target.left.name;
           const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
           this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
           if (!this.inFunction) this.program.globals.add(name);
-          // Check if key exists in object
+          // Checa se a chave existe no objeto
           const hasKey = this.newTemp();
           this.emit(OP.OBJ_HAS_OWN, hasKey, objTemp, keyLabel);
           const useValLabel = this.newLabel('objdef_val');
           const endDefLabel = this.newLabel('objdef_end');
           this.emit(OP.JUMP_IF_TRUE, hasKey, useValLabel);
-          // Key doesn't exist: use default
+          // Chave não existe: usa default
           const { temp: defVal } = this.visitExpression(target.right);
           this.emit(OP.STORE_VAR, name, defVal);
           this.emit(OP.JUMP, endDefLabel);
-          // Key exists: use value from object
+          // Chave existe: usa valor do objeto
           this.emit(OP.LABEL, useValLabel);
           this.emit(OP.STORE_VAR, name, valTemp);
           this.emit(OP.LABEL, endDefLabel);
           continue;
         }
 
-        // Nested object destructuring: const { a: { b } } = obj
+        // Destructuring de objeto aninhado: const { a: { b } } = obj
         if (target.type === 'ObjectPattern') {
           const tempName = `_nested_obj_${this.labelCounter++}`;
           this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
@@ -140,7 +140,7 @@ function visitVariableDeclaration(node) {
           continue;
         }
 
-        // Nested array destructuring: const { a: [b, c] } = obj
+        // Destructuring de array aninhado: const { a: [b, c] } = obj
         if (target.type === 'ArrayPattern') {
           const tempName = `_nested_arr_${this.labelCounter++}`;
           this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
@@ -160,7 +160,7 @@ function visitVariableDeclaration(node) {
 
     const rawName = decl.id.name;
 
-    // Qualify global variable names in module mode
+    // Qualifica nomes de variáveis globais no modo módulo
     const name = (!this.inFunction && this.moduleId) ? this.qualifyName(rawName) : rawName;
 
     if (decl.init) {
@@ -172,7 +172,7 @@ function visitVariableDeclaration(node) {
       if (exprResult.className) declInfo.className = exprResult.className;
       if (exprResult.funcName) declInfo.qualifiedName = exprResult.funcName;
       this.analyzer.currentScope.declare(rawName, declInfo);
-      // Track global variables
+      // Rastreia variáveis globais
       if (!this.inFunction) {
         this.program.globals.add(name);
       }
@@ -192,7 +192,7 @@ function visitVariableDeclaration(node) {
 function visitExpressionStatement(node) {
   const expr = node.expression;
 
-  // Handle console.log specially
+  // Trata console.log de forma especial
   if (expr.type === 'CallExpression' &&
       expr.callee.type === 'MemberExpression' &&
       expr.callee.object.type === 'Identifier' &&
@@ -201,7 +201,7 @@ function visitExpressionStatement(node) {
     return this.visitConsoleLog(expr);
   }
 
-  // Handle console.error
+  // Trata console.error
   if (expr.type === 'CallExpression' &&
       expr.callee.type === 'MemberExpression' &&
       expr.callee.object.type === 'Identifier' &&
@@ -210,7 +210,7 @@ function visitExpressionStatement(node) {
     return this.visitConsoleError(expr);
   }
 
-  // Handle process.exit()
+  // Trata process.exit()
   if (expr.type === 'CallExpression' &&
       expr.callee.type === 'MemberExpression' &&
       expr.callee.object.type === 'Identifier' &&
@@ -219,18 +219,18 @@ function visitExpressionStatement(node) {
     return this.visitProcessExit(expr);
   }
 
-  // Handle assignment expressions
+  // Trata expressões de atribuição
   if (expr.type === 'AssignmentExpression') {
     return this.visitAssignment(expr);
   }
 
-  // Handle update expressions (i++, i--)
+  // Trata expressões de atualização (i++, i--)
   if (expr.type === 'UpdateExpression') {
     this.visitUpdateExpression(expr);
     return;
   }
 
-  // General expression (e.g., function call)
+  // Expressão geral (ex: chamada de função)
   this.visitExpression(expr);
 }
 
@@ -267,7 +267,7 @@ function visitAssignment(node) {
   if (node.left.type === 'Identifier') {
     const rawName = node.left.name;
     let name = rawName;
-    // Resolve through importMap or qualified scope
+    // Resolve via importMap ou escopo qualificado
     if (this.importMap.has(name)) {
       name = this.importMap.get(name);
     } else {
@@ -277,7 +277,7 @@ function visitAssignment(node) {
       }
     }
 
-    // Enforce const
+    // Aplica const
     const constInfo = this.analyzer.currentScope.lookup(rawName);
     if (constInfo && constInfo.isConst) {
       const line = node.loc ? node.loc.start.line : '?';
@@ -288,7 +288,7 @@ function visitAssignment(node) {
       const result = this.visitExpression(node.right);
       const { temp, type } = result;
       this.emit(OP.STORE_VAR, name, temp);
-      // Update className in analyzer if reassigning to a class instance
+      // Atualiza className no analyzer ao reatribuir a instância de classe
       if (result.className) {
         const info = this.analyzer.currentScope.lookup(rawName);
         if (info) info.className = result.className;
@@ -346,7 +346,7 @@ function visitAssignment(node) {
       return { temp: result, type: TYPE_INT };
     }
 
-    // Bitwise compound assignments: &=, |=, ^=, <<=, >>=, >>>=
+    // Atribuições compostas bitwise: &=, |=, ^=, <<=, >>=, >>>=
     const bitwiseCompoundMap = {
       '&=': OP.BIT_AND, '|=': OP.BIT_OR, '^=': OP.BIT_XOR,
       '<<=': OP.SHL, '>>=': OP.SHR, '>>>=': OP.USHR,
@@ -361,7 +361,7 @@ function visitAssignment(node) {
       return { temp: result, type: TYPE_INT };
     }
 
-    // **= (exponentiation assignment)
+    // **= (atribuição de exponenciação)
     if (node.operator === '**=') {
       const { temp: rightTemp } = this.visitExpression(node.right);
       const t = this.newTemp();
@@ -372,7 +372,7 @@ function visitAssignment(node) {
       return { temp: result, type: TYPE_INT };
     }
 
-    // x &&= y — if x truthy, x = y
+    // x &&= y — se x truthy, x = y
     if (node.operator === '&&=') {
       const skipLabel = this.newLabel('andassign_skip');
       const t = this.newTemp();
@@ -386,7 +386,7 @@ function visitAssignment(node) {
       return { temp: result, type: TYPE_INT };
     }
 
-    // x ||= y — if x falsy, x = y
+    // x ||= y — se x falsy, x = y
     if (node.operator === '||=') {
       const skipLabel = this.newLabel('orassign_skip');
       const t = this.newTemp();
@@ -400,7 +400,7 @@ function visitAssignment(node) {
       return { temp: result, type: TYPE_INT };
     }
 
-    // x ??= y — if x falsy (nullish), x = y (same as ||= without type tags)
+    // x ??= y — se x falsy (nullish), x = y (mesmo que ||= sem type tags)
     if (node.operator === '??=') {
       const skipLabel = this.newLabel('ncassign_skip');
       const t = this.newTemp();
@@ -415,12 +415,12 @@ function visitAssignment(node) {
     }
   }
 
-  // Array destructuring assignment: [a, b] = [b, a]
+  // Atribuição com destructuring de array: [a, b] = [b, a]
   if (node.left.type === 'ArrayPattern') {
     const { temp: arrTemp } = this.visitExpression(node.right);
     for (let i = 0; i < node.left.elements.length; i++) {
       const elem = node.left.elements[i];
-      if (!elem) continue; // skip holes
+      if (!elem) continue; // pula buracos
       const idxTemp = this.newTemp();
       this.emit(OP.LOAD_INT, idxTemp, i);
       const valTemp = this.newTemp();
@@ -442,7 +442,7 @@ function visitAssignment(node) {
           this.emit(OP.OBJ_SET, objTemp, keyLabel, valTemp);
         }
       } else if (elem.type === 'AssignmentPattern') {
-        // [a = defaultVal] = arr — check bounds
+        // [a = valorPadrao] = arr — checa limites
         let name = elem.left.name;
         const eInfo = this.analyzer.currentScope.lookup(name);
         if (eInfo && eInfo.qualifiedName) name = eInfo.qualifiedName;
@@ -462,7 +462,7 @@ function visitAssignment(node) {
         this.emit(OP.STORE_VAR, name, valTemp);
         this.emit(OP.LABEL, endLabel);
       } else if (elem.type === 'RestElement') {
-        // [...rest] = arr — collect remaining elements
+        // [...rest] = arr — coleta elementos restantes
         const restName = elem.argument.name;
         const info = this.analyzer.currentScope.lookup(restName);
         let name = restName;
@@ -474,18 +474,18 @@ function visitAssignment(node) {
         this.emit(OP.ARRAY_LENGTH, lenTemp, arrTemp);
         this.emit(OP.ARRAY_SLICE, restArr, arrTemp, startTemp, lenTemp);
         this.emit(OP.STORE_VAR, name, restArr);
-        break; // rest must be last
+        break; // rest deve ser o último
       }
     }
     return { temp: arrTemp, type: TYPE_ARRAY };
   }
 
-  // Object destructuring assignment: ({x, y} = obj)
+  // Atribuição com destructuring de objeto: ({x, y} = obj)
   if (node.left.type === 'ObjectPattern') {
     const { temp: objTemp } = this.visitExpression(node.right);
     for (const prop of node.left.properties) {
       if (prop.type === 'RestElement') {
-        // {...rest} = obj — not implemented yet
+        // {...rest} = obj — ainda não implementado
         continue;
       }
       const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
@@ -500,7 +500,7 @@ function visitAssignment(node) {
         if (info && info.qualifiedName) name = info.qualifiedName;
         this.emit(OP.STORE_VAR, name, valTemp);
       } else if (target.type === 'AssignmentPattern') {
-        // { x = defaultVal } = obj — check key existence
+        // { x = valorPadrao } = obj — checa existência da chave
         let name = target.left.name;
         const oInfo = this.analyzer.currentScope.lookup(name);
         if (oInfo && oInfo.qualifiedName) name = oInfo.qualifiedName;
@@ -520,8 +520,8 @@ function visitAssignment(node) {
     return { temp: objTemp, type: TYPE_INT };
   }
 
-  // Member assignment: arr[i] = val, obj.prop = val, obj["key"] = val
-  // Check for setter: obj.prop = val → ClassName_prop(obj, val)
+  // Atribuição de membro: arr[i] = val, obj.prop = val, obj["key"] = val
+  // Checa setter: obj.prop = val → ClassName_prop(obj, val)
   if (node.left.type === 'MemberExpression' && !node.left.computed &&
       node.left.property.type === 'Identifier' && node.operator === '=') {
     const leftObj = node.left.object;
@@ -545,19 +545,19 @@ function visitAssignment(node) {
     }
   }
 
-  // Also handles compound: arr[i] += val, obj.prop -= val, etc.
+  // Também trata composto: arr[i] += val, obj.prop -= val, etc.
   if (node.left.type === 'MemberExpression') {
     const { temp: objTemp } = this.visitExpression(node.left.object);
     const { temp: rightTemp } = this.visitExpression(node.right);
 
-    // Determine the compound op (if any)
+    // Determina a operação composta (se houver)
     const compoundOpMap = {
       '+=': OP.ADD, '-=': OP.SUB, '*=': OP.MUL, '/=': OP.DIV, '%=': OP.MOD,
       '**=': OP.POW, '&=': OP.BIT_AND, '|=': OP.BIT_OR, '^=': OP.BIT_XOR,
       '<<=': OP.SHL, '>>=': OP.SHR, '>>>=': OP.USHR,
     };
 
-    // Helper: given old value + right, compute new value
+    // Helper: dado valor antigo + direito, calcula novo valor
     const computeVal = (oldTemp) => {
       if (node.operator === '=') return rightTemp;
       const compOp = compoundOpMap[node.operator];
@@ -571,7 +571,7 @@ function visitAssignment(node) {
 
     if (node.left.computed) {
       const prop = node.left.property;
-      // String key → object get/set
+      // Chave string → get/set de objeto
       if (prop.type === 'Literal' && typeof prop.value === 'string') {
         const keyLabel = this.program.addString(prop.value);
         if (node.operator !== '=') {
@@ -584,7 +584,7 @@ function visitAssignment(node) {
         this.emit(OP.OBJ_SET, objTemp, keyLabel, rightTemp);
         return { temp: rightTemp, type: TYPE_INT };
       }
-      // Numeric → array get/set
+      // Numérico → get/set de array
       const { temp: idxTemp } = this.visitExpression(prop);
       if (node.operator !== '=') {
         const oldTemp = this.newTemp();
@@ -597,7 +597,7 @@ function visitAssignment(node) {
       return { temp: rightTemp, type: TYPE_INT };
     }
 
-    // Non-computed: obj.prop
+    // Não-computed: obj.prop
     if (node.left.property.type === 'Identifier') {
       const keyLabel = this.program.addString(node.left.property.name);
       if (node.operator !== '=') {
@@ -653,7 +653,7 @@ function _emitArrayDestructuringDecl(srcVarName, pattern, isConst) {
       const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
       this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
       if (!this.inFunction) this.program.globals.add(name);
-      // Check bounds
+      // Checa limites
       const srcTemp0 = this.newTemp();
       this.emit(OP.LOAD_VAR, srcTemp0, srcVarName);
       const lenTemp = this.newTemp();
@@ -725,7 +725,7 @@ function _emitObjectDestructuringDecl(srcVarName, pattern, isConst) {
       const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
       this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
       if (!this.inFunction) this.program.globals.add(name);
-      // Check key existence
+      // Checa existência da chave
       const hasKey = this.newTemp();
       this.emit(OP.OBJ_HAS_OWN, hasKey, srcTemp, keyLabel);
       const useValLabel = this.newLabel('nodef_val');

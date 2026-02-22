@@ -1,4 +1,4 @@
-// expected: 1\n2\n3\n10\n20
+// esperado: 1\n2\n3\n10\n20
 let arr = [1, 2, 3];
 const [a, b, c] = arr;
 console.log(a);

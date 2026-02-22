@@ -5,13 +5,13 @@ const { TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_BOOL, TYPE_UNDEFINED, TYPE_NULL,
 class Scope {
   constructor(parent = null) {
     this.parent = parent;
-    this.variables = new Map(); // name → { type, offset, isConst }
+    this.variables = new Map(); // nome → { type, offset, isConst }
     this.depth = parent ? parent.depth + 1 : 0;
   }
 
   declare(name, info) {
     if (this.variables.has(name)) {
-      throw new Error(`Variable '${name}' already declared in this scope`);
+      throw new Error(`Variável '${name}' já declarada neste escopo`);
     }
     this.variables.set(name, info);
   }
@@ -38,7 +38,7 @@ class Analyzer {
   constructor() {
     this.globalScope = new Scope();
     this.currentScope = this.globalScope;
-    this.functions = new Map(); // funcName → { params, scope }
+    this.functions = new Map(); // nomeFunção → { params, scope }
     this.errors = [];
   }
 
@@ -97,7 +97,7 @@ class Analyzer {
       }
 
       case 'CallExpression':
-        return TYPE_INT; // default; could be improved
+        return TYPE_INT; // padrão; poderia ser melhorado
 
       case 'ConditionalExpression':
         return this.inferType(node.consequent);
@@ -112,7 +112,7 @@ class Analyzer {
         if (node.property.type === 'Identifier' && node.property.name === 'length') {
           return TYPE_INT;
         }
-        return TYPE_INT; // array element access
+        return TYPE_INT; // acesso a elemento de array
 
       default:
         return TYPE_UNDEFINED;

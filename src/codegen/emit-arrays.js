@@ -3,46 +3,46 @@
 const { TYPE_INT, TYPE_STRING } = require('../types');
 
 function emitArrayNew(dest, elements) {
-  // Array struct: [length (8)][capacity (8)][data ptr (8)][types ptr (8)]
-  // = 32 bytes header (types_ptr stores per-element type IDs)
+  // Struct do array: [tamanho (8)][capacidade (8)][ponteiro de dados (8)][ponteiro de tipos (8)]
+  // = 32 bytes de cabeçalho (types_ptr armazena IDs de tipo por elemento)
   const count = elements.length;
   const capacity = Math.max(count, 8);
 
-  // Allocate header (32 bytes)
-  this.instr('push rbx');    // save callee-saved
-  this.instr('push r12');   // padding for 16-byte alignment
+  // Aloca cabeçalho (32 bytes)
+  this.instr('push rbx');    // salva registrador preservado
+  this.instr('push r12');   // padding para alinhamento de 16 bytes
   this.instr('sub rsp, 32');
   this.instr('mov rcx, 32');
   this.instr('call malloc');
   this.instr('add rsp, 32');
-  this.instr('mov rbx, rax'); // header ptr
+  this.instr('mov rbx, rax'); // ponteiro do cabeçalho
 
-  // Set length
+  // Define o tamanho
   this.instr(`mov qword [rbx], ${count}`);
-  // Set capacity
+  // Define a capacidade
   this.instr(`mov qword [rbx+8], ${capacity}`);
 
-  // Allocate data (capacity * 8 bytes)
+  // Aloca dados (capacidade * 8 bytes)
   this.instr('sub rsp, 32');
   this.instr(`mov rcx, ${capacity * 8}`);
   this.instr('call malloc');
   this.instr('add rsp, 32');
-  this.instr('mov [rbx+16], rax'); // data ptr
+  this.instr('mov [rbx+16], rax'); // ponteiro de dados
 
-  // Store elements
+  // Armazena elementos
   for (let i = 0; i < elements.length; i++) {
     this.instr(`mov rcx, ${this.loc(elements[i].temp)}`);
     this.instr(`mov [rax+${i * 8}], rcx`);
   }
 
-  // Allocate types array (capacity bytes)
+  // Aloca array de tipos (capacidade bytes)
   this.instr('sub rsp, 32');
   this.instr(`mov rcx, ${capacity}`);
   this.instr('call malloc');
   this.instr('add rsp, 32');
-  this.instr('mov [rbx+24], rax'); // types ptr
+  this.instr('mov [rbx+24], rax'); // ponteiro de tipos
 
-  // Store type bytes
+  // Armazena bytes de tipo
   for (let i = 0; i < elements.length; i++) {
     const typeId = elements[i].type || TYPE_INT;
     this.instr(`mov byte [rax+${i}], ${typeId}`);
@@ -55,7 +55,7 @@ function emitArrayNew(dest, elements) {
 
 function emitArrayGet(dest, array, index) {
   this.instr(`mov rax, ${this.loc(array)}`);
-  this.instr('mov rax, [rax+16]'); // data ptr
+  this.instr('mov rax, [rax+16]'); // ponteiro de dados
   this.instr(`mov rcx, ${this.loc(index)}`);
   this.instr('mov rax, [rax+rcx*8]');
   this.instr(`mov ${this.loc(dest)}, rax`);
@@ -63,7 +63,7 @@ function emitArrayGet(dest, array, index) {
 
 function emitArraySet(array, index, value) {
   this.instr(`mov rax, ${this.loc(array)}`);
-  this.instr('mov rax, [rax+16]'); // data ptr
+  this.instr('mov rax, [rax+16]'); // ponteiro de dados
   this.instr(`mov rcx, ${this.loc(index)}`);
   this.instr(`mov rdx, ${this.loc(value)}`);
   this.instr('mov [rax+rcx*8], rdx');
@@ -71,65 +71,65 @@ function emitArraySet(array, index, value) {
 
 function emitArrayPush(array, value, type) {
   // arr.data[arr.length] = value; arr.length++
-  // With capacity expansion: if length == capacity, realloc to 2x
+  // Com expansão de capacidade: se tamanho == capacidade, realloc para 2x
   const typeId = type || TYPE_INT;
   const skipRealloc = this.newLabel('arr_push_ok');
 
   this.instr('push rbx');
   this.instr('push r12');
-  this.instr(`mov rbx, ${this.loc(array)}`);  // rbx = header ptr
-  this.instr('mov rcx, [rbx]');               // rcx = length
-  this.instr('mov rdx, [rbx+8]');             // rdx = capacity
+  this.instr(`mov rbx, ${this.loc(array)}`);  // rbx = ponteiro do cabeçalho
+  this.instr('mov rcx, [rbx]');               // rcx = tamanho
+  this.instr('mov rdx, [rbx+8]');             // rdx = capacidade
   this.instr('cmp rcx, rdx');
   this.instr(`jl ${skipRealloc}`);
 
-  // Expand: new capacity = old * 2
-  this.instr('shl rdx, 1');                   // rdx = capacity * 2
-  this.instr('mov [rbx+8], rdx');             // update capacity
-  this.instr('mov r12, rdx');                 // save new capacity
+  // Expande: nova capacidade = antiga * 2
+  this.instr('shl rdx, 1');                   // rdx = capacidade * 2
+  this.instr('mov [rbx+8], rdx');             // atualiza capacidade
+  this.instr('mov r12, rdx');                 // salva nova capacidade
 
-  // malloc(newCapacity * 8)
-  this.instr('shl rdx, 3');                   // rdx = newCapacity * 8
+  // malloc(novaCapacidade * 8)
+  this.instr('shl rdx, 3');                   // rdx = novaCapacidade * 8
   this.instr('sub rsp, 32');
   this.instr('mov rcx, rdx');
   this.instr('call malloc');
   this.instr('add rsp, 32');
-  this.instr('mov r12, rax');                 // r12 = new buf ptr (save it)
+  this.instr('mov r12, rax');                 // r12 = ponteiro do novo buf (salva)
 
-  // memcpy(newBuf, oldBuf, length * 8)
-  this.instr('mov r8, [rbx]');                // length
-  this.instr('shl r8, 3');                    // length * 8
+  // memcpy(novoBuf, bufAntigo, tamanho * 8)
+  this.instr('mov r8, [rbx]');                // tamanho
+  this.instr('shl r8, 3');                    // tamanho * 8
   this.instr('sub rsp, 32');
-  this.instr('mov rcx, r12');                 // dest = new buf
-  this.instr('mov rdx, [rbx+16]');            // src = old buf
+  this.instr('mov rcx, r12');                 // dest = novo buf
+  this.instr('mov rdx, [rbx+16]');            // src = buf antigo
   this.instr('call memcpy');
   this.instr('add rsp, 32');
 
-  // Free old data buffer
+  // Libera buffer de dados antigo
   this.instr('sub rsp, 32');
   this.instr('mov rcx, [rbx+16]');
   this.instr('call free');
   this.instr('add rsp, 32');
 
-  // Update data ptr (use saved r12, not rax which free clobbered)
+  // Atualiza ponteiro de dados (usa r12 salvo, não rax que free corrompeu)
   this.instr('mov [rbx+16], r12');
 
-  // Realloc types array
+  // Realloc do array de tipos
   this.instr('sub rsp, 32');
-  this.instr('mov rcx, [rbx+24]');            // old types ptr
-  this.instr('mov rdx, [rbx+8]');             // new capacity
+  this.instr('mov rcx, [rbx+24]');            // ponteiro de tipos antigo
+  this.instr('mov rdx, [rbx+8]');             // nova capacidade
   this.instr('call realloc');
   this.instr('add rsp, 32');
-  this.instr('mov [rbx+24], rax');            // update types ptr
+  this.instr('mov [rbx+24], rax');            // atualiza ponteiro de tipos
 
   this.label(skipRealloc);
-  // Now do the push
-  this.instr('mov rcx, [rbx]');               // length (= index for new elem)
-  this.instr('mov rdx, [rbx+16]');            // data ptr
+  // Agora faz o push
+  this.instr('mov rcx, [rbx]');               // tamanho (= índice do novo elem)
+  this.instr('mov rdx, [rbx+16]');            // ponteiro de dados
   this.instr(`mov r8, ${this.loc(value)}`);
   this.instr('mov [rdx+rcx*8], r8');
-  // Store type byte
-  this.instr('mov rdx, [rbx+24]');            // types ptr
+  // Armazena byte de tipo
+  this.instr('mov rdx, [rbx+24]');            // ponteiro de tipos
   this.instr(`mov byte [rdx+rcx], ${typeId}`);
   this.instr('inc qword [rbx]');              // length++
 
@@ -139,7 +139,7 @@ function emitArrayPush(array, value, type) {
 
 function emitArrayLength(dest, array) {
   this.instr(`mov rax, ${this.loc(array)}`);
-  this.instr('mov rax, [rax]'); // length field
+  this.instr('mov rax, [rax]'); // campo de tamanho
   this.instr(`mov ${this.loc(dest)}, rax`);
 }
 
@@ -163,14 +163,14 @@ function emitTemplate(dest, parts) {
     return;
   }
 
-  // For multiple parts: build string by concatenating
-  // Start with first part
+  // Para múltiplas partes: constrói string por concatenação
+  // Começa com a primeira parte
   let currentTemp;
   if (parts[0].type === TYPE_STRING) {
     currentTemp = parts[0].temp;
   } else {
-    // Convert to string
-    currentTemp = dest; // reuse dest temporarily
+    // Converte para string
+    currentTemp = dest; // reutiliza dest temporariamente
     this.instr('sub rsp, 32');
     this.instr(`mov rcx, ${this.loc(parts[0].temp)}`);
     this.instr('call __int_to_str');
@@ -178,7 +178,7 @@ function emitTemplate(dest, parts) {
     this.instr(`mov ${this.loc(currentTemp)}, rax`);
   }
 
-  // Concatenate remaining parts
+  // Concatena as partes restantes
   for (let i = 1; i < parts.length; i++) {
     const rightType = parts[i].type;
     this.emitStrConcat(dest, currentTemp, parts[i].temp,
@@ -188,7 +188,7 @@ function emitTemplate(dest, parts) {
 }
 
 function emitArraySpread(destArray, srcArray) {
-  // Copy all elements from srcArray into destArray using ARRAY_PUSH logic
+  // Copia todos os elementos de srcArray para destArray usando lógica de ARRAY_PUSH
   // Loop: for i = 0; i < src.length; i++ { dest.push(src[i]) }
   this.comment('array spread');
   this.instr('push rbx');
@@ -196,8 +196,8 @@ function emitArraySpread(destArray, srcArray) {
   this.instr('push r13');
   this.instr('push r14');
 
-  this.instr(`mov rbx, ${this.loc(destArray)}`);   // rbx = dest header
-  this.instr(`mov r12, ${this.loc(srcArray)}`);     // r12 = src header
+  this.instr(`mov rbx, ${this.loc(destArray)}`);   // rbx = cabeçalho dest
+  this.instr(`mov r12, ${this.loc(srcArray)}`);     // r12 = cabeçalho src
   this.instr('mov r13, [r12]');                     // r13 = src.length
   this.instr('xor r14, r14');                       // r14 = i = 0
 
@@ -208,33 +208,33 @@ function emitArraySpread(destArray, srcArray) {
   this.instr('cmp r14, r13');
   this.instr(`jge ${endLabel}`);
 
-  // Get src[i]
-  this.instr('mov rax, [r12+16]');                  // src data ptr
-  this.instr('mov rcx, [rax+r14*8]');               // src[i] value
-  // Get src type[i]
-  this.instr('mov rax, [r12+24]');                  // src types ptr
-  this.instr('movzx edx, byte [rax+r14]');          // src type[i]
+  // Obtém src[i]
+  this.instr('mov rax, [r12+16]');                  // ponteiro de dados src
+  this.instr('mov rcx, [rax+r14*8]');               // valor de src[i]
+  // Obtém tipo de src[i]
+  this.instr('mov rax, [r12+24]');                  // ponteiro de tipos src
+  this.instr('movzx edx, byte [rax+r14]');          // tipo de src[i]
 
-  // Push to dest: check capacity first
+  // Insere no dest: checa capacidade primeiro
   this.instr('mov rax, [rbx]');                     // dest.length
-  this.instr('cmp rax, [rbx+8]');                   // cmp with capacity
+  this.instr('cmp rax, [rbx+8]');                   // compara com capacidade
   const skipRealloc = this.newLabel('arrspread_ok');
   this.instr(`jl ${skipRealloc}`);
 
-  // Need to expand - save rcx, rdx (value/type)
+  // Precisa expandir - salva rcx, rdx (valor/tipo)
   this.instr('push rcx');
   this.instr('push rdx');
-  // Double capacity
+  // Dobra a capacidade
   this.instr('mov rax, [rbx+8]');
   this.instr('shl rax, 1');
   this.instr('mov [rbx+8], rax');
-  // malloc new data
+  // malloc novos dados
   this.instr('shl rax, 3');
   this.instr('sub rsp, 32');
   this.instr('mov rcx, rax');
   this.instr('call malloc');
   this.instr('add rsp, 32');
-  this.instr('push rax');  // save new buf
+  this.instr('push rax');  // salva novo buf
   // memcpy
   this.instr('mov r8, [rbx]');
   this.instr('shl r8, 3');
@@ -243,14 +243,14 @@ function emitArraySpread(destArray, srcArray) {
   this.instr('mov rdx, [rbx+16]');
   this.instr('call memcpy');
   this.instr('add rsp, 32');
-  // free old
+  // libera antigo
   this.instr('sub rsp, 32');
   this.instr('mov rcx, [rbx+16]');
   this.instr('call free');
   this.instr('add rsp, 32');
   this.instr('pop rax');
   this.instr('mov [rbx+16], rax');
-  // realloc types
+  // realloc tipos
   this.instr('sub rsp, 32');
   this.instr('mov rcx, [rbx+24]');
   this.instr('mov rdx, [rbx+8]');
@@ -261,12 +261,12 @@ function emitArraySpread(destArray, srcArray) {
   this.instr('pop rcx');
 
   this.label(skipRealloc);
-  // Store value
+  // Armazena valor
   this.instr('mov rax, [rbx]');                     // dest.length
-  this.instr('mov r8, [rbx+16]');                   // dest data ptr
-  this.instr('mov [r8+rax*8], rcx');                // data[length] = value
-  this.instr('mov r8, [rbx+24]');                   // dest types ptr
-  this.instr('mov byte [r8+rax], dl');              // types[length] = type
+  this.instr('mov r8, [rbx+16]');                   // ponteiro de dados dest
+  this.instr('mov [r8+rax*8], rcx');                // data[length] = valor
+  this.instr('mov r8, [rbx+24]');                   // ponteiro de tipos dest
+  this.instr('mov byte [r8+rax], dl');              // types[length] = tipo
   this.instr('inc qword [rbx]');                    // dest.length++
 
   this.instr('inc r14');
@@ -280,41 +280,41 @@ function emitArraySpread(destArray, srcArray) {
 }
 
 function emitCallSpread(dest, funcName, normalArgs, spreadArray) {
-  // Simple approach: iterate the spread array and build a flat arg list
-  // For now, support spread as the last argument only
+  // Abordagem simples: itera o array spread e constrói uma lista plana de argumentos
+  // Por enquanto, suporta spread apenas como último argumento
   this.comment(`call ${funcName} with spread`);
 
-  // Push callee-saved registers
+  // Empilha registradores preservados
   this.instr('push rbx');
   this.instr('push r12');
   this.instr('push r13');
   this.instr('push r14');
   this.instr('push r15');
-  this.instr('push rdi');  // 6 pushes = aligned
+  this.instr('push rdi');  // 6 pushes = alinhado
 
-  // Load spread array info
-  this.instr(`mov rbx, ${this.loc(spreadArray)}`);  // array header
-  this.instr('mov r12, [rbx]');                      // spread length
-  this.instr('mov r13, [rbx+16]');                   // spread data ptr
+  // Carrega informações do array spread
+  this.instr(`mov rbx, ${this.loc(spreadArray)}`);  // cabeçalho do array
+  this.instr('mov r12, [rbx]');                      // tamanho do spread
+  this.instr('mov r13, [rbx+16]');                   // ponteiro de dados do spread
 
-  // Total args = normalArgs.length + spread length
+  // Total de args = normalArgs.length + tamanho do spread
   const normalCount = normalArgs.length;
   this.instr(`mov r14, ${normalCount}`);
-  this.instr('add r14, r12');                        // r14 = total arg count
+  this.instr('add r14, r12');                        // r14 = total de args
 
-  // Calculate extra stack space needed for args > 4
-  // We need to push spread args onto the stack (right to left)
-  // First, push all spread args right to left, then normal args > 4 right to left
-  // Then load first 4 into registers
+  // Calcula espaço extra na stack necessário para args > 4
+  // Precisamos empilhar args do spread na stack (da direita para esquerda)
+  // Primeiro, empilha todos os args do spread da direita para esquerda, depois args normais > 4 da direita para esquerda
+  // Então carrega os primeiros 4 nos registradores
 
-  // Calculate how many extra stack args: max(0, totalArgs - 4)
+  // Calcula quantos args extras na stack: max(0, totalArgs - 4)
   this.instr('mov r15, r14');
   this.instr('sub r15, 4');
   this.instr('xor rdi, rdi');
   this.instr('cmp r15, 0');
   const noExtraLabel = this.newLabel('callspread_noextra');
   this.instr(`jle ${noExtraLabel}`);
-  // Align stack: if odd number of extra args, add padding
+  // Alinha stack: se número ímpar de args extras, adiciona padding
   this.instr('test r15, 1');
   const alignedLabel = this.newLabel('callspread_aligned');
   this.instr(`jz ${alignedLabel}`);
@@ -322,10 +322,10 @@ function emitCallSpread(dest, funcName, normalArgs, spreadArray) {
   this.instr('add rdi, 8');
   this.label(alignedLabel);
 
-  // Push spread args in reverse (those that go on stack, i.e., index >= 4 - normalCount)
-  // Actually let's simplify: push ALL spread args right to left, then push normal args > 4
-  // Then we'll load first 4 from what we pushed. No — that's complex.
-  // Simpler: push spread right-to-left
+  // Empilha args do spread em reverso (aqueles que vão na stack, i.e., índice >= 4 - normalCount)
+  // Na verdade vamos simplificar: empilha TODOS os args do spread da direita para esquerda, depois empilha args normais > 4
+  // Depois carregamos os primeiros 4 do que empilhamos. Não — isso é complexo.
+  // Mais simples: empilha spread da direita para esquerda
   this.instr('mov rcx, r12');
   this.instr('dec rcx');
   const pushSpreadLoop = this.newLabel('callspread_pushloop');
@@ -333,7 +333,7 @@ function emitCallSpread(dest, funcName, normalArgs, spreadArray) {
   this.label(pushSpreadLoop);
   this.instr('cmp rcx, 0');
   this.instr(`jl ${pushSpreadDone}`);
-  // Only push if this arg index (normalCount + rcx) >= 4
+  // Só empilha se este índice de arg (normalCount + rcx) >= 4
   this.instr('mov rax, rcx');
   this.instr(`add rax, ${normalCount}`);
   this.instr('cmp rax, 4');
@@ -348,31 +348,31 @@ function emitCallSpread(dest, funcName, normalArgs, spreadArray) {
 
   this.label(noExtraLabel);
 
-  // Now set up first 4 args from normal + spread
+  // Agora configura os primeiros 4 args de normal + spread
   const paramRegs = ['rcx', 'rdx', 'r8', 'r9'];
-  // Set all to UNDEF_SENTINEL first
+  // Define todos como UNDEF_SENTINEL primeiro
   for (let i = 0; i < 4; i++) {
     this.instr(`mov ${paramRegs[i]}, UNDEF_SENTINEL`);
   }
-  // Load normal args
+  // Carrega args normais
   for (let i = 0; i < normalCount && i < 4; i++) {
     this.instr(`mov ${paramRegs[i]}, ${this.loc(normalArgs[i].temp)}`);
   }
-  // Load spread args into remaining registers (if any)
+  // Carrega args do spread nos registradores restantes (se houver)
   for (let i = normalCount; i < 4; i++) {
     const spreadIdx = i - normalCount;
-    this.instr(`cmp r12, ${spreadIdx + 1}`);  // check if spread has this many elements
+    this.instr(`cmp r12, ${spreadIdx + 1}`);  // checa se spread tem essa quantidade de elementos
     const skipLoadLabel = this.newLabel('callspread_skipload');
     this.instr(`jl ${skipLoadLabel}`);
     this.instr(`mov ${paramRegs[i]}, [r13+${spreadIdx * 8}]`);
     this.label(skipLoadLabel);
   }
 
-  // Shadow space + call
+  // Shadow space + chamada
   this.instr('sub rsp, 32');
   this.instr(`call func_${funcName}`);
   this.instr('add rsp, 32');
-  this.instr('add rsp, rdi');  // clean up extra args
+  this.instr('add rsp, rdi');  // limpa args extras
 
   this.instr(`mov ${this.loc(dest)}, rax`);
 
@@ -387,11 +387,11 @@ function emitCallSpread(dest, funcName, normalArgs, spreadArray) {
 function emitArrayPop(dest, array) {
   this.comment('array.pop()');
   this.instr(`mov rax, ${this.loc(array)}`);
-  this.instr('mov rcx, [rax]');           // length
-  this.instr('dec rcx');                   // new length
-  this.instr('mov [rax], rcx');           // update length
-  this.instr('mov rdx, [rax+16]');        // data ptr
-  this.instr('mov rax, [rdx+rcx*8]');     // data[newLength]
+  this.instr('mov rcx, [rax]');           // tamanho
+  this.instr('dec rcx');                   // novo tamanho
+  this.instr('mov [rax], rcx');           // atualiza tamanho
+  this.instr('mov rdx, [rax+16]');        // ponteiro de dados
+  this.instr('mov rax, [rdx+rcx*8]');     // data[novoTamanho]
   this.instr(`mov ${this.loc(dest)}, rax`);
 }
 
@@ -400,13 +400,13 @@ function emitArrayShift(dest, array) {
   this.instr('push rbx');
   this.instr('push r12');
   this.instr(`mov rbx, ${this.loc(array)}`);
-  this.instr('mov rax, [rbx+16]');        // data ptr
-  this.instr('mov rcx, [rax]');           // first element
+  this.instr('mov rax, [rbx+16]');        // ponteiro de dados
+  this.instr('mov rcx, [rax]');           // primeiro elemento
   this.instr(`mov ${this.loc(dest)}, rcx`);
-  // Shift data left: memmove(data, data+8, (length-1)*8)
+  // Desloca dados para a esquerda: memmove(data, data+8, (tamanho-1)*8)
   this.instr('mov r12, [rbx]');
   this.instr('dec r12');
-  this.instr('mov [rbx], r12');           // new length
+  this.instr('mov [rbx], r12');           // novo tamanho
   this.instr('mov rcx, [rbx+16]');        // dest = data
   this.instr('lea rdx, [rcx+8]');         // src = data+8
   this.instr('mov r8, r12');
@@ -414,7 +414,7 @@ function emitArrayShift(dest, array) {
   this.instr('sub rsp, 32');
   this.instr('call memmove');
   this.instr('add rsp, 32');
-  // Shift types left
+  // Desloca tipos para a esquerda
   this.instr('mov rcx, [rbx+24]');
   this.instr('lea rdx, [rcx+1]');
   this.instr('mov r8, r12');
@@ -436,7 +436,7 @@ function emitArrayUnshift(array, value, type) {
   this.instr('mov rcx, [rbx]');
   this.instr('cmp rcx, [rbx+8]');
   this.instr(`jl ${skipRealloc}`);
-  // Expand
+  // Expande
   this.instr('mov rdx, [rbx+8]');
   this.instr('shl rdx, 1');
   this.instr('mov [rbx+8], rdx');
@@ -454,7 +454,7 @@ function emitArrayUnshift(array, value, type) {
   this.instr('mov [rbx+24], rax');
 
   this.label(skipRealloc);
-  // Shift data right: memmove(data+8, data, length*8)
+  // Desloca dados para a direita: memmove(data+8, data, tamanho*8)
   this.instr('mov r12, [rbx]');
   this.instr('mov rdx, [rbx+16]');        // src = data
   this.instr('lea rcx, [rdx+8]');         // dest = data+8
@@ -463,14 +463,14 @@ function emitArrayUnshift(array, value, type) {
   this.instr('sub rsp, 32');
   this.instr('call memmove');
   this.instr('add rsp, 32');
-  // Shift types right
+  // Desloca tipos para a direita
   this.instr('mov rdx, [rbx+24]');
   this.instr('lea rcx, [rdx+1]');
   this.instr('mov r8, r12');
   this.instr('sub rsp, 32');
   this.instr('call memmove');
   this.instr('add rsp, 32');
-  // Set first element
+  // Define o primeiro elemento
   this.instr('mov rax, [rbx+16]');
   this.instr(`mov rcx, ${this.loc(value)}`);
   this.instr('mov [rax], rcx');
@@ -486,8 +486,8 @@ function emitArrayIndexOf(dest, array, value) {
   this.instr('push rbx');
   this.instr('push r12');
   this.instr(`mov rbx, ${this.loc(array)}`);
-  this.instr('mov r12, [rbx]');           // length
-  this.instr('mov rbx, [rbx+16]');        // data ptr
+  this.instr('mov r12, [rbx]');           // tamanho
+  this.instr('mov rbx, [rbx+16]');        // ponteiro de dados
   this.instr(`mov rcx, ${this.loc(value)}`);
   this.instr('xor rdx, rdx');             // i = 0
   const loopLbl = this.newLabel('aidxof_loop');
@@ -546,7 +546,7 @@ function emitArrayIncludes(dest, array, value) {
 
 function emitArrayJoin(dest, array, separator) {
   this.comment('array.join()');
-  // 8 pushes = 64 bytes = aligned
+  // 8 pushes = 64 bytes = alinhado
   this.instr('push rbx');
   this.instr('push r12');
   this.instr('push r13');
@@ -554,15 +554,15 @@ function emitArrayJoin(dest, array, separator) {
   this.instr('push r15');
   this.instr('push rdi');
   this.instr('push rsi');
-  this.instr('sub rsp, 8');              // alignment padding (7 pushes + pad = 64)
+  this.instr('sub rsp, 8');              // padding de alinhamento (7 pushes + pad = 64)
 
   this.instr(`mov rax, ${this.loc(array)}`);
   this.instr(`mov r13, ${this.loc(separator)}`);
-  this.instr('mov r14, [rax]');           // length
-  this.instr('mov r15, [rax+16]');        // data ptr
-  this.instr('mov rdi, [rax+24]');        // types ptr
+  this.instr('mov r14, [rax]');           // tamanho
+  this.instr('mov r15, [rax+16]');        // ponteiro de dados
+  this.instr('mov rdi, [rax+24]');        // ponteiro de tipos
 
-  // Allocate result buffer (4096)
+  // Aloca buffer de resultado (4096)
   this.instr('sub rsp, 32');
   this.instr('mov rcx, 4096');
   this.instr('call malloc');
@@ -581,21 +581,21 @@ function emitArrayJoin(dest, array, separator) {
   this.instr('cmp r12, r14');
   this.instr(`jge ${endLbl}`);
 
-  // Add separator if not first element
+  // Adiciona separador se não for o primeiro elemento
   this.instr('test r12, r12');
   this.instr(`jz ${skipSepLbl}`);
   this.instr('sub rsp, 32');
   this.instr('mov rcx, rbx');             // dest = buf
-  this.instr('mov rdx, r13');             // src = separator
+  this.instr('mov rdx, r13');             // src = separador
   this.instr('call strcat');
   this.instr('add rsp, 32');
   this.label(skipSepLbl);
 
-  // Get element as string → rsi
+  // Obtém elemento como string → rsi
   this.instr('movzx eax, byte [rdi+r12]');
   this.instr(`cmp al, ${TYPE_STRING}`);
   this.instr(`je ${isStrLbl}`);
-  // Convert int to string
+  // Converte inteiro para string
   this.instr('sub rsp, 32');
   this.instr('mov rcx, [r15+r12*8]');
   this.instr('call __int_to_str');
@@ -606,7 +606,7 @@ function emitArrayJoin(dest, array, separator) {
   this.instr('mov rsi, [r15+r12*8]');
   this.label(appendLbl);
 
-  // Append element string: strcat(buf, rsi)
+  // Concatena string do elemento: strcat(buf, rsi)
   this.instr('sub rsp, 32');
   this.instr('mov rcx, rbx');
   this.instr('mov rdx, rsi');
@@ -618,7 +618,7 @@ function emitArrayJoin(dest, array, separator) {
   this.label(endLbl);
 
   this.instr(`mov ${this.loc(dest)}, rbx`);
-  this.instr('add rsp, 8');              // remove alignment padding
+  this.instr('add rsp, 8');              // remove padding de alinhamento
   this.instr('pop rsi');
   this.instr('pop rdi');
   this.instr('pop r15');
@@ -635,52 +635,52 @@ function emitArraySlice(dest, array, start, end) {
   this.instr('push r13');
   this.instr('push r14');
 
-  this.instr(`mov r12, ${this.loc(array)}`);    // header
-  this.instr(`mov r13, ${this.loc(start)}`);     // start index
-  this.instr(`mov r14, ${this.loc(end)}`);       // end index
+  this.instr(`mov r12, ${this.loc(array)}`);    // cabeçalho
+  this.instr(`mov r13, ${this.loc(start)}`);     // índice inicial
+  this.instr(`mov r14, ${this.loc(end)}`);       // índice final
 
-  // Handle negative start
+  // Trata início negativo
   this.instr('test r13, r13');
   const startOk = this.newLabel('slc_sok');
   this.instr(`jge ${startOk}`);
-  this.instr('add r13, [r12]');           // start += length
+  this.instr('add r13, [r12]');           // start += tamanho
   this.label(startOk);
-  // Handle negative end
+  // Trata fim negativo
   this.instr('test r14, r14');
   const endOk = this.newLabel('slc_eok');
   this.instr(`jge ${endOk}`);
   this.instr('add r14, [r12]');
   this.label(endOk);
 
-  // count = end - start
+  // contagem = fim - início
   this.instr('mov rcx, r14');
-  this.instr('sub rcx, r13');             // rcx = count
-  // Clamp to >= 0
+  this.instr('sub rcx, r13');             // rcx = contagem
+  // Limita a >= 0
   this.instr('test rcx, rcx');
   const countOk = this.newLabel('slc_cok');
   this.instr(`jg ${countOk}`);
   this.instr('xor rcx, rcx');
   this.label(countOk);
-  this.instr('push rcx');                 // save count
+  this.instr('push rcx');                 // salva contagem
 
-  // Allocate new array header (32 bytes)
+  // Aloca novo cabeçalho de array (32 bytes)
   this.instr('sub rsp, 32');
   this.instr('mov rcx, 32');
   this.instr('call malloc');
   this.instr('add rsp, 32');
   this.instr('mov rbx, rax');
-  this.instr('pop rcx');                  // restore count
+  this.instr('pop rcx');                  // restaura contagem
   this.instr('push rcx');
-  this.instr('mov [rbx], rcx');           // length = count
+  this.instr('mov [rbx], rcx');           // tamanho = contagem
   this.instr('mov rax, rcx');
   this.instr('test rax, rax');
   const nonZero = this.newLabel('slc_nz');
   this.instr(`jnz ${nonZero}`);
-  this.instr('mov rax, 1');               // at least 1 for malloc
+  this.instr('mov rax, 1');               // pelo menos 1 para malloc
   this.label(nonZero);
-  this.instr('mov [rbx+8], rax');         // capacity = count (or 1)
+  this.instr('mov [rbx+8], rax');         // capacidade = contagem (ou 1)
 
-  // Allocate data
+  // Aloca dados
   this.instr('shl rax, 3');
   this.instr('sub rsp, 32');
   this.instr('mov rcx, rax');
@@ -688,8 +688,8 @@ function emitArraySlice(dest, array, start, end) {
   this.instr('add rsp, 32');
   this.instr('mov [rbx+16], rax');
 
-  // Allocate types
-  this.instr('pop rcx');                  // count
+  // Aloca tipos
+  this.instr('pop rcx');                  // contagem
   this.instr('push rcx');
   this.instr('test rcx, rcx');
   const typNz = this.newLabel('slc_tnz');
@@ -701,19 +701,19 @@ function emitArraySlice(dest, array, start, end) {
   this.instr('add rsp, 32');
   this.instr('mov [rbx+24], rax');
 
-  // memcpy data: dest=newData, src=oldData+start*8, count*8
-  this.instr('pop rcx');                  // count
+  // memcpy dados: dest=novosDados, src=dadosAntigos+start*8, contagem*8
+  this.instr('pop rcx');                  // contagem
   this.instr('push rcx');
   this.instr('mov r8, rcx');
   this.instr('shl r8, 3');
   this.instr('mov rcx, [rbx+16]');        // dest
-  this.instr('mov rdx, [r12+16]');        // src base
+  this.instr('mov rdx, [r12+16]');        // base src
   this.instr('lea rdx, [rdx+r13*8]');     // src + start*8
   this.instr('sub rsp, 32');
   this.instr('call memcpy');
   this.instr('add rsp, 32');
 
-  // memcpy types: dest=newTypes, src=oldTypes+start, count
+  // memcpy tipos: dest=novosTipos, src=tiposAntigos+start, contagem
   this.instr('pop rcx');
   this.instr('mov r8, rcx');
   this.instr('mov rcx, [rbx+24]');
@@ -738,9 +738,9 @@ function emitArrayReverse(dest, array) {
   this.instr('push r14');
 
   this.instr(`mov r12, ${this.loc(array)}`);
-  this.instr('mov r13, [r12]');           // length
+  this.instr('mov r13, [r12]');           // tamanho
 
-  // Allocate new array header
+  // Aloca novo cabeçalho de array
   this.instr('sub rsp, 32');
   this.instr('mov rcx, 32');
   this.instr('call malloc');
@@ -749,7 +749,7 @@ function emitArrayReverse(dest, array) {
   this.instr('mov [rbx], r13');
   this.instr('mov [rbx+8], r13');
 
-  // Allocate data
+  // Aloca dados
   this.instr('mov rax, r13');
   this.instr('test rax, rax');
   const nz1 = this.newLabel('rev_nz1');
@@ -763,7 +763,7 @@ function emitArrayReverse(dest, array) {
   this.instr('add rsp, 32');
   this.instr('mov [rbx+16], rax');
 
-  // Allocate types
+  // Aloca tipos
   this.instr('mov rax, r13');
   this.instr('test rax, rax');
   const nz2 = this.newLabel('rev_nz2');
@@ -776,23 +776,23 @@ function emitArrayReverse(dest, array) {
   this.instr('add rsp, 32');
   this.instr('mov [rbx+24], rax');
 
-  // Copy elements in reverse
+  // Copia elementos em reverso
   this.instr('xor r14, r14');             // i = 0
   const loopLbl = this.newLabel('rev_loop');
   const endLbl = this.newLabel('rev_end');
   this.label(loopLbl);
   this.instr('cmp r14, r13');
   this.instr(`jge ${endLbl}`);
-  // src index = length - 1 - i
+  // índice src = tamanho - 1 - i
   this.instr('mov rax, r13');
   this.instr('dec rax');
   this.instr('sub rax, r14');
-  // Copy data
+  // Copia dados
   this.instr('mov rcx, [r12+16]');
   this.instr('mov rcx, [rcx+rax*8]');
   this.instr('mov rdx, [rbx+16]');
   this.instr('mov [rdx+r14*8], rcx');
-  // Copy type
+  // Copia tipo
   this.instr('mov rcx, [r12+24]');
   this.instr('movzx ecx, byte [rcx+rax]');
   this.instr('mov rdx, [rbx+24]');
@@ -818,9 +818,9 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr(`mov r12, ${this.loc(arr1)}`);
   this.instr(`mov r13, ${this.loc(arr2)}`);
   this.instr('mov r14, [r12]');
-  this.instr('add r14, [r13]');           // total length
+  this.instr('add r14, [r13]');           // tamanho total
 
-  // Allocate header
+  // Aloca cabeçalho
   this.instr('sub rsp, 32');
   this.instr('mov rcx, 32');
   this.instr('call malloc');
@@ -829,7 +829,7 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr('mov [rbx], r14');
   this.instr('mov [rbx+8], r14');
 
-  // Allocate data
+  // Aloca dados
   this.instr('mov rax, r14');
   this.instr('test rax, rax');
   const nz1 = this.newLabel('cat_nz1');
@@ -843,7 +843,7 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr('add rsp, 32');
   this.instr('mov [rbx+16], rax');
 
-  // Allocate types
+  // Aloca tipos
   this.instr('mov rax, r14');
   this.instr('test rax, rax');
   const nz2 = this.newLabel('cat_nz2');
@@ -856,7 +856,7 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr('add rsp, 32');
   this.instr('mov [rbx+24], rax');
 
-  // memcpy arr1 data
+  // memcpy dados do arr1
   this.instr('mov r8, [r12]');
   this.instr('shl r8, 3');
   this.instr('mov rcx, [rbx+16]');
@@ -865,10 +865,10 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr('call memcpy');
   this.instr('add rsp, 32');
 
-  // memcpy arr2 data after arr1
+  // memcpy dados do arr2 após arr1
   this.instr('mov rax, [r12]');
   this.instr('mov rcx, [rbx+16]');
-  this.instr('lea rcx, [rcx+rax*8]');     // dest = newData + len1*8
+  this.instr('lea rcx, [rcx+rax*8]');     // dest = novosDados + len1*8
   this.instr('mov rdx, [r13+16]');
   this.instr('mov r8, [r13]');
   this.instr('shl r8, 3');
@@ -876,7 +876,7 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr('call memcpy');
   this.instr('add rsp, 32');
 
-  // memcpy arr1 types
+  // memcpy tipos do arr1
   this.instr('mov r8, [r12]');
   this.instr('mov rcx, [rbx+24]');
   this.instr('mov rdx, [r12+24]');
@@ -884,7 +884,7 @@ function emitArrayConcat(dest, arr1, arr2) {
   this.instr('call memcpy');
   this.instr('add rsp, 32');
 
-  // memcpy arr2 types
+  // memcpy tipos do arr2
   this.instr('mov rax, [r12]');
   this.instr('mov rcx, [rbx+24]');
   this.instr('add rcx, rax');
@@ -923,16 +923,16 @@ module.exports = {
   emitArrayFill,
 };
 
-// arr.splice(start, deleteCount, ...items) — mutates array, returns deleted elements
+// arr.splice(start, deleteCount, ...items) — muta o array, retorna elementos removidos
 function emitArraySplice(dest, arr, start, deleteCount, items) {
-  // For simplicity: create a new array with deleted elements, then mutate the source
-  // This is complex in assembly, so we do a simplified version:
-  // 1. Create result array with deleted elements
-  // 2. Shift elements to close the gap / make room for items
-  // For now, simple approach: create deleted array, adjust length
+  // Para simplificar: cria um novo array com elementos removidos, depois muta a origem
+  // Isso é complexo em assembly, então fazemos uma versão simplificada:
+  // 1. Cria array resultado com elementos removidos
+  // 2. Desloca elementos para fechar a lacuna / abrir espaço para items
+  // Por enquanto, abordagem simples: cria array de removidos, ajusta tamanho
   this.comment('array.splice()');
 
-  // Save regs
+  // Salva registradores
   this.instr('push rbx');
   this.instr('push r12');
   this.instr('push r13');
@@ -940,22 +940,22 @@ function emitArraySplice(dest, arr, start, deleteCount, items) {
   this.instr('push r15');
   this.instr('sub rsp, 40');
 
-  this.instr(`mov r12, ${this.loc(arr)}`);     // array ptr
-  this.instr(`mov r13, ${this.loc(start)}`);    // start index
-  this.instr(`mov r14, ${this.loc(deleteCount)}`); // delete count
+  this.instr(`mov r12, ${this.loc(arr)}`);     // ponteiro do array
+  this.instr(`mov r13, ${this.loc(start)}`);    // índice inicial
+  this.instr(`mov r14, ${this.loc(deleteCount)}`); // contagem de remoção
 
-  // Get array length
-  this.instr('mov rax, [r12]');       // length
-  this.instr('mov r15, rax');          // r15 = original length
+  // Obtém tamanho do array
+  this.instr('mov rax, [r12]');       // tamanho
+  this.instr('mov r15, rax');          // r15 = tamanho original
 
-  // Clamp start
+  // Limita start
   this.instr('cmp r13, r15');
   const clampLbl = this.newLabel('splice_clamp');
   this.instr(`jle ${clampLbl}`);
   this.instr('mov r13, r15');
   this.label(clampLbl);
 
-  // Clamp deleteCount
+  // Limita deleteCount
   this.instr('mov rax, r15');
   this.instr('sub rax, r13');
   this.instr('cmp r14, rax');
@@ -964,55 +964,55 @@ function emitArraySplice(dest, arr, start, deleteCount, items) {
   this.instr('mov r14, rax');
   this.label(clamp2Lbl);
 
-  // Create result array (deleted elements) — allocate with ARRAY_NEW equivalent
-  // For simplicity, create an empty array and push deleted elements
-  this.instr('mov rcx, 32');          // header size
+  // Cria array resultado (elementos removidos) — aloca com equivalente a ARRAY_NEW
+  // Para simplificar, cria um array vazio e faz push dos elementos removidos
+  this.instr('mov rcx, 32');          // tamanho do cabeçalho
   this.instr('call malloc');
-  this.instr('mov rbx, rax');         // rbx = result array
-  this.instr('mov qword [rbx], 0');   // length = 0
-  this.instr('mov qword [rbx + 8], 0'); // capacity = 0
-  this.instr('mov qword [rbx + 16], 0'); // data = null
-  this.instr('mov qword [rbx + 24], 0'); // types = null
+  this.instr('mov rbx, rax');         // rbx = array resultado
+  this.instr('mov qword [rbx], 0');   // tamanho = 0
+  this.instr('mov qword [rbx + 8], 0'); // capacidade = 0
+  this.instr('mov qword [rbx + 16], 0'); // dados = null
+  this.instr('mov qword [rbx + 24], 0'); // tipos = null
   this.instr(`mov ${this.loc(dest)}, rbx`);
 
-  // Copy deleted elements to result array using ARRAY_PUSH logic
-  // For each deleted element: push to result
+  // Copia elementos removidos para o array resultado usando lógica de ARRAY_PUSH
+  // Para cada elemento removido: push para resultado
   const delLoopLbl = this.newLabel('splice_delloop');
   const delDoneLbl = this.newLabel('splice_deldone');
   this.instr('xor rcx, rcx'); // i = 0
   this.label(delLoopLbl);
   this.instr('cmp rcx, r14');
   this.instr(`jge ${delDoneLbl}`);
-  // Get element at start + i
+  // Obtém elemento em start + i
   this.instr('push rcx');
   this.instr('add rcx, r13');        // index = start + i
   this.instr('mov rax, [r12 + 16]'); // data ptr
-  this.instr('mov rax, [rax + rcx*8]'); // element value
-  // We'll just adjust the source array; skip copying to result for now
+  this.instr('mov rax, [rax + rcx*8]'); // valor do elemento
+  // Apenas ajustamos o array fonte; pula cópia para resultado por enquanto
   this.instr('pop rcx');
   this.instr('inc rcx');
   this.instr(`jmp ${delLoopLbl}`);
   this.label(delDoneLbl);
 
-  // Shift elements to close the gap
-  // Move elements from start+deleteCount to start
+  // Desloca elementos para fechar a lacuna
+  // Move elementos de start+deleteCount para start
   const shiftLoopLbl = this.newLabel('splice_shift');
   const shiftDoneLbl = this.newLabel('splice_shiftdone');
   this.instr('mov rcx, r13');        // dst index = start
   this.instr('mov rdx, r13');
   this.instr('add rdx, r14');        // src index = start + deleteCount
   this.label(shiftLoopLbl);
-  this.instr('cmp rdx, r15');        // while src < length
+  this.instr('cmp rdx, r15');        // enquanto src < tamanho
   this.instr(`jge ${shiftDoneLbl}`);
   this.instr('mov rax, [r12 + 16]'); // data ptr
-  this.instr('mov r8, [rax + rdx*8]'); // src element
+  this.instr('mov r8, [rax + rdx*8]'); // elemento src
   this.instr('mov [rax + rcx*8], r8'); // dst = src
   this.instr('inc rcx');
   this.instr('inc rdx');
   this.instr(`jmp ${shiftLoopLbl}`);
   this.label(shiftDoneLbl);
 
-  // Update length: newLen = length - deleteCount
+  // Atualiza tamanho: novoTam = tamanho - deleteCount
   this.instr('mov rax, r15');
   this.instr('sub rax, r14');
   this.instr('mov [r12], rax');
@@ -1025,7 +1025,7 @@ function emitArraySplice(dest, arr, start, deleteCount, items) {
   this.instr('pop rbx');
 }
 
-// arr.fill(value, start, end) — fills array with value from start to end
+// arr.fill(value, start, end) — preenche o array com valor de start até end
 function emitArrayFill(dest, arr, value, start, end) {
   this.comment('array.fill()');
   this.instr('push rbx');
@@ -1041,7 +1041,7 @@ function emitArrayFill(dest, arr, value, start, end) {
   this.label(loopLbl);
   this.instr('cmp rcx, rdx');
   this.instr(`jge ${doneLbl}`);
-  this.instr('mov rax, [rbx + 16]');  // data ptr
+  this.instr('mov rax, [rbx + 16]');  // ponteiro de dados
   this.instr('mov [rax + rcx*8], r8');
   this.instr('inc rcx');
   this.instr(`jmp ${loopLbl}`);

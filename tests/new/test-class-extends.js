@@ -1,4 +1,4 @@
-// Test class inheritance
+// Testa herança de classes
 class Animal {
   constructor(name, legs) {
     this.name = name;
@@ -12,7 +12,7 @@ class Animal {
 class Dog extends Animal {
   constructor(name) {
     super(name, 4);
-    this.sound = 1; // 1 = woof
+    this.sound = 1; // 1 = late
   }
   getSound() {
     return this.sound;
@@ -23,7 +23,7 @@ const dog = new Dog(42);
 console.log(dog.getLegs());
 console.log(dog.getSound());
 
-// Test super.method()
+// Testa super.method()
 class Base {
   constructor(x) {
     this.x = x;

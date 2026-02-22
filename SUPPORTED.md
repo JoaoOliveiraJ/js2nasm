@@ -1,175 +1,227 @@
-# js2nasm - Supported Node.js / JavaScript Features
+# js2nasm - Features Suportadas de JavaScript / Node.js
 
-Compiler: JavaScript → x86-64 NASM Assembly (Windows x64 ABI)
-
----
-
-## Variable Declarations
-
-- `let` declarations
-- `const` declarations
-- `var` declarations
-- Uninitialized variables (default to undefined)
-- Array destructuring: `const [a, b] = arr`
-- Object destructuring: `const { x, y } = obj`
+Compilador: JavaScript → Assembly NASM x86-64 (ABI Windows x64)
 
 ---
 
-## Data Types
+## Declaracao de Variaveis
 
-| Type | Representation |
-|------|----------------|
-| Integer | 64-bit signed |
+- Declaracoes `let`
+- Declaracoes `const`
+- Declaracoes `var`
+- Variaveis nao inicializadas (padrao undefined)
+- Destructuring de array: `const [a, b] = arr`
+- Destructuring de objeto: `const { x, y } = obj`
+- Destructuring com defaults: `const [a, b = 10] = arr`, `const { x = 5 } = obj`
+- Destructuring aninhado: `const [a, [b, c]] = arr`, `const { a: { b } } = obj`
+- Rest em destructuring: `const [a, ...rest] = arr`
+- Atribuicao com destructuring: `[a, b] = [b, a]`, `({x, y} = obj)`
+
+---
+
+## Tipos de Dados
+
+| Tipo | Representacao |
+|------|---------------|
+| Inteiro | 64-bit com sinal |
 | Float | 64-bit IEEE 754 double |
-| String | null-terminated UTF-8 |
-| Boolean | `true` / `false` |
+| String | UTF-8 terminada em null |
+| Booleano | `true` / `false` |
 | null | literal |
 | undefined | literal |
-| Array | header + data + types |
-| Object | header + keys + values |
-| Function | first-class value |
+| Array | header + dados + tipos |
+| Objeto | header + chaves + valores |
+| Funcao | valor de primeira classe |
 
 ---
 
-## Operators
+## Operadores
 
-### Arithmetic
-`+` `-` `*` `/` `%` `**` (unary `-`, unary `+`)
+### Aritmeticos
+`+` `-` `*` `/` `%` `**` (unario `-`, unario `+`)
 
-### Comparison
+### Comparacao
 `<` `>` `<=` `>=` `==` `===` `!=` `!==`
 
-### Logical
+### Logicos
 `&&` `||` `!` `??`
 
 ### Bitwise
 `&` `|` `^` `~` `<<` `>>` `>>>`
 
-### Assignment
-`=` `+=` `-=` `*=` `/=` `%=` `&&=` `||=` `??=`
+### Atribuicao
+`=` `+=` `-=` `*=` `/=` `%=` `**=` `&&=` `||=` `??=` `&=` `|=` `^=` `<<=` `>>=` `>>>=`
 
-### Increment / Decrement
+### Incremento / Decremento
 `++x` `--x` `x++` `x--`
 
-### Other
-`typeof` `void` `? :` (ternary) `,` (comma)
+### Outros
+`typeof` `void` `? :` (ternario) `,` (virgula) `in` `instanceof` `delete`
 
 ---
 
-## Control Flow
+## Fluxo de Controle
 
 - `if` / `else if` / `else`
 - `while`
 - `do...while`
-- `for` (C-style)
-- `for...of` (arrays)
+- `for` (estilo C)
+- `for...of` (arrays e strings)
+- `for...in` (objetos)
 - `switch` / `case` / `default` (fall-through)
-- `break`
-- `continue`
+- `break` / `continue` (incluindo com labels)
 - `try` / `catch` / `finally`
 - `throw`
 
 ---
 
-## Functions
+## Funcoes
 
-- Named function declarations: `function name() {}`
+- Declaracoes de funcao: `function nome() {}`
 - Arrow functions: `const f = () => {}`
-- Arrow concise body (auto-return): `const f = x => x + 1`
-- Default parameters: `function f(x = 10) {}`
-- Rest parameters: `function f(...args) {}`
-- Spread in calls: `f(...arr)`
-- Closures and lexical scoping
-- Nested functions
-- Recursion
-- Return with/without value
+- Arrow com corpo conciso (auto-return): `const f = x => x + 1`
+- Parametros default: `function f(x = 10) {}`
+- Rest params: `function f(...args) {}`
+- Spread em chamadas: `f(...arr)`
+- Closures e escopo lexico
+- Funcoes aninhadas
+- Recursao
+- Return com/sem valor
+- IIFE: `(function(x) { ... })(val)`
+- Destructuring em parametros: `function f({ x, y }) {}`
 
 ---
 
-## String Methods
+## Classes
 
-| Method | Description |
-|--------|-------------|
-| `.length` | String length |
-| `.charAt(i)` | Character at index |
-| `.charCodeAt(i)` | Character code at index |
-| `.indexOf(s)` | Find substring position |
-| `.includes(s)` | Check if contains substring |
-| `.toUpperCase()` | Convert to uppercase |
-| `.toLowerCase()` | Convert to lowercase |
-| `.trim()` | Remove whitespace |
-| `.slice(start, end)` | Extract substring |
-| `.substring(start, end)` | Extract substring |
-| `.split(sep)` | Split into array |
-| `.replace(search, repl)` | Replace first occurrence |
-| `.repeat(n)` | Repeat string n times |
-| `.startsWith(prefix)` | Check prefix |
-| `.endsWith(suffix)` | Check suffix |
-| `.toString()` | Convert to string |
+- Declaracoes de classe: `class Foo {}`
+- Construtor: `constructor() {}`
+- Metodos: `method() {}`
+- Metodos estaticos: `static method() {}`
+- Getter / Setter: `get prop() {}`, `set prop(val) {}`
+- Criacao de instancia: `new Foo()`
+- Chamada de metodo: `obj.method()`
+- Heranca: `class Dog extends Animal {}`
+- `super()` no construtor
+- `super.method()` em metodos
+- Binding de `this`
 
 ---
 
-## Array Methods
+## Metodos de String
 
-| Method | Description |
-|--------|-------------|
-| `.length` | Array length |
-| `.push(elem)` | Add to end |
-| `.pop()` | Remove from end |
-| `.shift()` | Remove from start |
-| `.unshift(elem)` | Add to start |
-| `.indexOf(elem)` | Find element position |
-| `.includes(elem)` | Check if element exists |
-| `.join(sep)` | Join elements into string |
-| `.slice(start, end)` | Create subarray |
-| `.reverse()` | Reverse array |
-| `.concat(arr)` | Concatenate arrays |
-| `Array.isArray(val)` | Check if value is array |
+| Metodo | Descricao |
+|--------|-----------|
+| `.length` | Tamanho da string |
+| `.charAt(i)` | Caractere no indice |
+| `.charCodeAt(i)` | Codigo do caractere no indice |
+| `.indexOf(s)` | Posicao da substring |
+| `.includes(s)` | Verifica se contem substring |
+| `.toUpperCase()` | Converte para maiusculas |
+| `.toLowerCase()` | Converte para minusculas |
+| `.trim()` | Remove espacos |
+| `.trimStart()` | Remove espacos do inicio |
+| `.trimEnd()` | Remove espacos do final |
+| `.slice(inicio, fim)` | Extrai substring |
+| `.substring(inicio, fim)` | Extrai substring |
+| `.split(sep)` | Divide em array |
+| `.replace(busca, troca)` | Substitui primeira ocorrencia |
+| `.replaceAll(busca, troca)` | Substitui todas as ocorrencias |
+| `.repeat(n)` | Repete a string n vezes |
+| `.startsWith(prefixo)` | Verifica prefixo |
+| `.endsWith(sufixo)` | Verifica sufixo |
+| `.padStart(tam, pad)` | Preenche no inicio |
+| `.padEnd(tam, pad)` | Preenche no final |
+| `.toString()` | Converte para string |
+| `String.fromCharCode(cod)` | Cria caractere a partir do codigo |
 
 ---
 
-## Object Features
+## Metodos de Array
 
-- Object literals: `{ key: value }`
-- Shorthand properties: `{ x }` for `{ x: x }`
-- Dot notation: `obj.prop`
-- Bracket notation: `obj[key]`
-- Property assignment: `obj.prop = value`
+| Metodo | Descricao |
+|--------|-----------|
+| `.length` | Tamanho do array |
+| `.push(elem)` | Adiciona no final |
+| `.pop()` | Remove do final |
+| `.shift()` | Remove do inicio |
+| `.unshift(elem)` | Adiciona no inicio |
+| `.indexOf(elem)` | Posicao do elemento |
+| `.includes(elem)` | Verifica se elemento existe |
+| `.join(sep)` | Junta elementos em string |
+| `.slice(inicio, fim)` | Cria subarray |
+| `.splice(inicio, qtd, ...itens)` | Remove/insere elementos |
+| `.fill(valor, inicio, fim)` | Preenche com valor |
+| `.reverse()` | Inverte array |
+| `.concat(arr)` | Concatena arrays |
+| `.forEach(fn)` | Itera sobre elementos |
+| `.map(fn)` | Mapeia elementos |
+| `.filter(fn)` | Filtra elementos |
+| `.reduce(fn, init)` | Reduz a um valor |
+| `.find(fn)` | Encontra primeiro elemento |
+| `.findIndex(fn)` | Encontra indice do primeiro elemento |
+| `.some(fn)` | Verifica se algum passa no teste |
+| `.every(fn)` | Verifica se todos passam no teste |
+| `.sort(fn?)` | Ordena (com comparador opcional) |
+| `Array.isArray(val)` | Verifica se e array |
+| `Array.from(iter)` | Cria array a partir de iteravel |
+
+---
+
+## Features de Objeto
+
+- Literais de objeto: `{ chave: valor }`
+- Propriedades shorthand: `{ x }` para `{ x: x }`
+- Notacao de ponto: `obj.prop`
+- Notacao de colchetes: `obj[chave]`
+- Atribuicao de propriedade: `obj.prop = valor`
 - `delete obj.prop`
-- Object spread: `{ ...obj1, ...obj2 }`
+- Spread de objeto: `{ ...obj1, ...obj2 }`
 - `Object.keys(obj)`
 - `Object.values(obj)`
 - `Object.entries(obj)`
-- `obj.hasOwnProperty(key)`
+- `Object.assign(destino, ...fontes)`
+- `obj.hasOwnProperty(chave)`
 
 ---
 
-## Built-in Functions
+## Funcoes Embutidas
 
 ### Console
-- `console.log(...args)` — print to stdout
-- `console.error(...args)` — print to stderr
+- `console.log(...args)` — imprime no stdout
+- `console.error(...args)` — imprime no stderr
 
 ### Global
-- `parseInt(string)` — parse integer from string
-- `parseFloat(string)` — parse float from string
-- `Number(value)` — convert to number
-- `String(value)` — convert to string
-- `isNaN(value)` — check if NaN
+- `parseInt(string)` — converte string para inteiro
+- `parseFloat(string)` — converte string para float
+- `Number(valor)` — converte para numero
+- `String(valor)` — converte para string
+- `isNaN(valor)` — verifica se e NaN
 
-### Process
-- `process.exit(code)` — exit with code
+### Processo
+- `process.exit(codigo)` — sai com codigo
 
 ### Math
-| Function/Constant | Description |
-|-------------------|-------------|
-| `Math.abs(x)` | Absolute value |
-| `Math.floor(x)` | Round down |
-| `Math.ceil(x)` | Round up |
-| `Math.sqrt(x)` | Square root |
-| `Math.pow(b, e)` | Exponentiation |
-| `Math.max(a, b)` | Maximum |
-| `Math.min(a, b)` | Minimum |
+| Funcao/Constante | Descricao |
+|-------------------|-----------|
+| `Math.abs(x)` | Valor absoluto |
+| `Math.floor(x)` | Arredonda para baixo |
+| `Math.ceil(x)` | Arredonda para cima |
+| `Math.round(x)` | Arredonda |
+| `Math.trunc(x)` | Trunca |
+| `Math.sign(x)` | Sinal (-1, 0, 1) |
+| `Math.sqrt(x)` | Raiz quadrada |
+| `Math.pow(b, e)` | Exponenciacao |
+| `Math.max(a, b)` | Maximo |
+| `Math.min(a, b)` | Minimo |
+| `Math.random()` | Numero aleatorio |
+| `Math.log(x)` | Logaritmo natural |
+| `Math.log2(x)` | Logaritmo base 2 |
+| `Math.sin(x)` | Seno |
+| `Math.cos(x)` | Cosseno |
+| `Math.tan(x)` | Tangente |
+| `Math.atan2(y, x)` | Arco tangente de y/x |
+| `Math.clz32(x)` | Conta zeros a esquerda |
 | `Math.PI` | 3.141592653589793 |
 | `Math.E` | 2.718281828459045 |
 | `Math.LN2` | 0.6931471805599453 |
@@ -179,95 +231,95 @@ Compiler: JavaScript → x86-64 NASM Assembly (Windows x64 ABI)
 | `Math.SQRT2` | 1.4142135623730951 |
 | `Math.SQRT1_2` | 0.7071067811865476 |
 
+### Number
+| Metodo/Constante | Descricao |
+|-------------------|-----------|
+| `Number.isInteger(val)` | Verifica se e inteiro |
+| `Number.isFinite(val)` | Verifica se e finito |
+| `Number.parseInt(str)` | Converte para inteiro |
+| `Number.parseFloat(str)` | Converte para float |
+| `Number.MAX_SAFE_INTEGER` | Maior inteiro seguro |
+| `Number.MIN_SAFE_INTEGER` | Menor inteiro seguro |
+| `.toFixed(digitos)` | Formata com casas decimais |
+
 ---
 
-## Modern JS Features
+## Features Modernas do JS
 
 ### Optional Chaining
 - `obj?.prop`
 - `obj?.[expr]`
 - `obj?.method()`
-- Chained: `obj?.a?.b?.c`
+- Encadeado: `obj?.a?.b?.c`
 
 ### Nullish Coalescing
 - `a ?? b`
 
 ### Template Literals
-- `` `text ${expr} text` ``
-- Multi-line strings
+- `` `texto ${expr} texto` ``
+- Strings multi-linha
 
 ### Destructuring
 - Array: `const [a, b] = arr`
-- Object: `const { x, y } = obj`
-- Rest in destructuring: `const [a, ...rest] = arr`
+- Objeto: `const { x, y } = obj`
+- Com defaults: `const [a, b = 10] = arr`, `const { x = 5 } = obj`
+- Rest: `const [a, ...rest] = arr`
+- Aninhado: `const [a, [b, c]] = arr`
+- Atribuicao: `[a, b] = [b, a]`
 
 ### Spread
-- Array spread: `[...arr1, ...arr2]`
-- Object spread: `{ ...obj1, ...obj2 }`
-- Call spread: `f(...args)`
+- Spread de array: `[...arr1, ...arr2]`
+- Spread de objeto: `{ ...obj1, ...obj2 }`
+- Spread em chamada: `f(...args)`
 
-### Classes
-- Class declarations: `class Foo {}`
-- Constructors: `constructor() {}`
-- Methods: `method() {}`
-- Instance creation: `new Foo()`
-- Method calls: `obj.method()`
-- `this` binding
-
-### Exception Handling
+### Tratamento de Excecoes
 - `try { } catch(e) { }`
 - `try { } finally { }`
 - `try { } catch(e) { } finally { }`
-- `throw value`
+- `throw valor`
 
 ---
 
-## Module System
+## Sistema de Modulos
 
-- `export function name() {}`
+- `export function nome() {}`
 - `export const x = 1`
 - `export default ...`
-- `import { name } from './module'`
-- Cross-module function calls
-- Cross-module variable access
+- `import { nome } from './modulo'`
+- Chamadas de funcao entre modulos
+- Acesso a variaveis entre modulos
 
 ---
 
-## Not Supported
+## Nao Suportado
 
 - `async` / `await` / Promises
 - Generators / `yield`
-- `for...in` loops
-- Regular expressions (RegExp)
+- Expressoes regulares (RegExp)
 - `Map` / `Set` / `WeakMap` / `WeakSet`
 - Symbols
 - Proxies
-- Getters / setters
-- Private class fields (`#field`)
-- Static class methods
-- `extends` / `super` (inheritance)
+- Campos privados de classe (`#campo`)
 - Tagged template literals
-- Dynamic `import()`
+- `import()` dinamico
 - `import.meta`
-- `with` statements
-- Labeled statements
+- `with`
 - BigInt
 
 ---
 
-## Compilation Target
+## Alvo de Compilacao
 
-- **Architecture:** x86-64
-- **OS:** Windows (x64 ABI)
+- **Arquitetura:** x86-64
+- **SO:** Windows (ABI x64)
 - **Assembler:** NASM
 - **Linker:** GoLink
-- **Calling convention:** Windows x64 (rcx, rdx, r8, r9 + shadow space)
-- **C Runtime:** msvcrt (printf, malloc, free, strlen, memcpy, strcmp, etc.)
+- **Convencao de chamada:** Windows x64 (rcx, rdx, r8, r9 + shadow space)
+- **Runtime C:** msvcrt (printf, malloc, free, strlen, memcpy, strcmp, etc.)
 
-## Statistics
+## Estatisticas
 
-- **80+** IR opcodes
-- **50+** operators
-- **30+** built-in functions/methods
-- **200+** concrete JS features
-- **51** test files
+- **80+** opcodes IR
+- **50+** operadores
+- **50+** funcoes/metodos embutidos
+- **200+** features concretas de JS

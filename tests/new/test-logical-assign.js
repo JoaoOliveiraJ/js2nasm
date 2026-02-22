@@ -1,4 +1,4 @@
-// expected: 99\n42\n99
+// esperado: 99\n42\n99
 let a = 5;
 a &&= 99;
 console.log(a);

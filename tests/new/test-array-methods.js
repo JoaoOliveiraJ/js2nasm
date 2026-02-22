@@ -1,8 +1,8 @@
-// expected: 3
-// expected: 2
-// expected: 4
-// expected: 1
-// expected: false
+// esperado: 3
+// esperado: 2
+// esperado: 4
+// esperado: 1
+// esperado: false
 let arr = [1, 2, 3];
 let x = arr.pop();
 console.log(x);

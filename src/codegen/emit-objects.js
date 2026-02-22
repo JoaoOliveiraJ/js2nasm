@@ -3,39 +3,39 @@
 const { TYPE_INT, TYPE_STRING } = require('../types');
 
 function emitObjNew(dest, keys, values) {
-  // Object layout: [count (8)][keys ptr (8)][values ptr (8)] = 24 bytes header
-  // keys = array of string pointers, values = array of qwords
+  // Layout do objeto: [contagem (8)][ponteiro de chaves (8)][ponteiro de valores (8)] = 24 bytes de cabeçalho
+  // chaves = array de ponteiros de string, valores = array de qwords
   this.comment('object literal');
   const count = keys.length;
   this.instr('push rbx');
   this.instr('push r12');
-  // Allocate header
+  // Aloca cabeçalho
   this.instr('sub rsp, 32');
   this.instr('mov rcx, 24');
   this.instr('call malloc');
   this.instr('add rsp, 32');
   this.instr('mov rbx, rax');
   this.instr(`mov qword [rbx], ${count}`);
-  // Allocate keys array
+  // Aloca array de chaves
   this.instr('sub rsp, 32');
   this.instr(`mov rcx, ${count * 8}`);
   this.instr('call malloc');
   this.instr('add rsp, 32');
   this.instr('mov [rbx+8], rax');
   this.instr('mov r12, rax');
-  // Store key pointers (string labels)
+  // Armazena ponteiros das chaves (labels de string)
   for (let i = 0; i < count; i++) {
     this.instr(`lea rax, [${keys[i]}]`);
     this.instr(`mov [r12+${i * 8}], rax`);
   }
-  // Allocate values array
+  // Aloca array de valores
   this.instr('sub rsp, 32');
   this.instr(`mov rcx, ${count * 8}`);
   this.instr('call malloc');
   this.instr('add rsp, 32');
   this.instr('mov [rbx+16], rax');
   this.instr('mov r12, rax');
-  // Store values
+  // Armazena valores
   for (let i = 0; i < count; i++) {
     this.instr(`mov rax, ${this.loc(values[i])}`);
     this.instr(`mov [r12+${i * 8}], rax`);
@@ -46,24 +46,24 @@ function emitObjNew(dest, keys, values) {
 }
 
 function emitObjGet(dest, obj, keyLabel) {
-  // Linear search: compare each key with strcmp
+  // Busca linear: compara cada chave com strcmp
   this.comment(`obj.get("${keyLabel}")`);
   this.instr('push rbx');
   this.instr('push r12');
   this.instr('push r13');
   this.instr('push r14');
-  this.instr(`mov rbx, ${this.loc(obj)}`);   // rbx = header
-  this.instr('mov r12, [rbx]');              // r12 = count
-  this.instr('mov r13, [rbx+8]');            // r13 = keys ptr
-  this.instr('mov r14, [rbx+16]');           // r14 = values ptr
-  this.instr('xor rcx, rcx');                // rcx = index
+  this.instr(`mov rbx, ${this.loc(obj)}`);   // rbx = cabecalho
+  this.instr('mov r12, [rbx]');              // r12 = contagem
+  this.instr('mov r13, [rbx+8]');            // r13 = ponteiro das chaves
+  this.instr('mov r14, [rbx+16]');           // r14 = ponteiro dos valores
+  this.instr('xor rcx, rcx');                // rcx = indice
   const loopLbl = this.newLabel('objget_loop');
   const foundLbl = this.newLabel('objget_found');
   const endLbl = this.newLabel('objget_end');
   this.label(loopLbl);
   this.instr('cmp rcx, r12');
   this.instr(`jge ${endLbl}`);
-  this.instr('push rcx');                    // save index
+  this.instr('push rcx');                    // salvar indice
   this.instr('sub rsp, 32');
   this.instr('mov rcx, [r13+rcx*8]');        // key[i]
   this.instr(`lea rdx, [${keyLabel}]`);

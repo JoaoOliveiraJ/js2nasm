@@ -1,4 +1,4 @@
-// expected: [1, 2, 3]\n[hello, world]\n[true, false]\n[1, hello, true]\n[]
+// esperado: [1, 2, 3]\n[hello, world]\n[true, false]\n[1, hello, true]\n[]
 let nums = [1, 2, 3];
 console.log(nums);
 let strs = ["hello", "world"];

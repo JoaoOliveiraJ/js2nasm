@@ -1,4 +1,4 @@
-// Test static methods
+// Testa métodos estáticos
 class MathHelper {
   static add(a, b) {
     return a + b;
@@ -11,7 +11,7 @@ class MathHelper {
 console.log(MathHelper.add(3, 4));
 console.log(MathHelper.multiply(5, 6));
 
-// Test static + instance methods together
+// Testa métodos estáticos + instância juntos
 class Counter {
   constructor(start) {
     this.count = start;

@@ -1,4 +1,4 @@
-// expected: 0\n5
+// esperado: 0\n5
 function f(x = 5) {
   console.log(x);
 }

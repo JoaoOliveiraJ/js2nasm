@@ -1,4 +1,4 @@
-// Test getter and setter
+// Testa getter e setter
 class Circle {
   constructor(radius) {
     this.radius = radius;

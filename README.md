@@ -1,30 +1,30 @@
 # js2nasm
 
-A JavaScript to x86-64 NASM assembly compiler targeting Windows.
+Compilador de JavaScript para assembly x86-64 NASM, gerando executaveis nativos para Windows.
 
-Compiles a substantial subset of JavaScript/ES2022 directly to native Windows executables — no VM, no interpreter, no runtime.
+Compila um subconjunto grande de JavaScript/ES2022 diretamente para executaveis nativos — sem VM, sem interpretador, sem runtime.
 
 ```
 JavaScript → AST (acorn) → IR (three-address code) → NASM x86-64 → .obj → .exe
 ```
 
-## Quick Start
+## Inicio Rapido
 
 ```bash
 npm install
 
-# Compile and run
+# Compilar e executar
 node bin/js2nasm.js hello.js --run
 
-# Generate .asm only
+# Gerar apenas o .asm
 node bin/js2nasm.js hello.js --no-compile
 
-# Debug output
-node bin/js2nasm.js hello.js --emit-ir    # show IR
-node bin/js2nasm.js hello.js --emit-ast   # show AST
+# Saida de debug
+node bin/js2nasm.js hello.js --emit-ir    # mostrar IR
+node bin/js2nasm.js hello.js --emit-ast   # mostrar AST
 ```
 
-## Example
+## Exemplo
 
 ```js
 function fibonacci(n) {
@@ -40,40 +40,43 @@ $ node bin/js2nasm.js fibonacci.js --run
 55
 ```
 
-This compiles to ~100 lines of NASM assembly, links into a native `.exe`, and runs directly on Windows.
+Isso compila para ~100 linhas de assembly NASM, linka num `.exe` nativo e roda direto no Windows.
 
-## What It Supports
+## O Que Suporta
 
-### Language Features
-- Variables (`let`, `const`, `var`), closures, recursion
-- All operators: arithmetic, comparison, logical, bitwise, assignment
-- Control flow: `if/else`, `for`, `while`, `do-while`, `switch`, `for...of`, `break`, `continue`
-- Functions: declarations, arrow functions, default params, rest params
+### Features da Linguagem
+- Variaveis (`let`, `const`, `var`), closures, recursao
+- Todos os operadores: aritmeticos, comparacao, logicos, bitwise, atribuicao
+- Fluxo de controle: `if/else`, `for`, `while`, `do-while`, `switch`, `for...of`, `for...in`, `break`, `continue`
+- Funcoes: declaracoes, arrow functions, parametros default, rest params
 - Template literals: `` `hello ${name}` ``
-- Destructuring: `const [a, b] = arr`, `const { x, y } = obj`
+- Destructuring: `const [a, b] = arr`, `const { x, y } = obj`, com defaults e aninhado
 - Spread: `[...arr]`, `{...obj}`, `f(...args)`
-- Classes: `class`, `constructor`, methods, `new`
-- Exception handling: `try/catch/finally`, `throw`
+- Classes: `class`, `constructor`, metodos, `new`, `extends`, `super()`, metodos estaticos, getter/setter
+- Tratamento de excecoes: `try/catch/finally`, `throw`
 - Optional chaining: `obj?.prop`, `obj?.method()`
 - Nullish coalescing: `a ?? b`
-- Logical assignment: `&&=`, `||=`, `??=`
-- ES modules: `import`/`export`
+- Atribuicao logica: `&&=`, `||=`, `??=`
+- Modulos ES: `import`/`export`
+- Metodos de alta ordem: `map`, `filter`, `reduce`, `forEach`, `find`, `some`, `every`, `findIndex`, `sort`
 
-### Built-in Methods
+### Metodos Embutidos
 
-**String:** `charAt`, `indexOf`, `includes`, `toUpperCase`, `toLowerCase`, `trim`, `slice`, `substring`, `split`, `replace`, `repeat`, `startsWith`, `endsWith`, `length`
+**String:** `charAt`, `charCodeAt`, `indexOf`, `includes`, `toUpperCase`, `toLowerCase`, `trim`, `trimStart`, `trimEnd`, `slice`, `substring`, `split`, `replace`, `replaceAll`, `repeat`, `startsWith`, `endsWith`, `padStart`, `padEnd`, `length`
 
-**Array:** `push`, `pop`, `shift`, `unshift`, `indexOf`, `includes`, `join`, `slice`, `reverse`, `concat`, `length`, `Array.isArray`
+**Array:** `push`, `pop`, `shift`, `unshift`, `indexOf`, `includes`, `join`, `slice`, `reverse`, `concat`, `splice`, `fill`, `length`, `Array.isArray`, `Array.from`
 
-**Object:** `Object.keys`, `Object.values`, `Object.entries`, `hasOwnProperty`
+**Object:** `Object.keys`, `Object.values`, `Object.entries`, `Object.assign`, `hasOwnProperty`
 
-**Math:** `abs`, `floor`, `ceil`, `sqrt`, `pow`, `max`, `min`, `PI`, `E`, `SQRT2`...
+**Math:** `abs`, `floor`, `ceil`, `round`, `trunc`, `sign`, `sqrt`, `pow`, `max`, `min`, `random`, `log`, `log2`, `sin`, `cos`, `tan`, `atan2`, `clz32`, `PI`, `E`, `SQRT2`...
+
+**Number:** `Number.isInteger`, `Number.isFinite`, `Number.parseInt`, `Number.parseFloat`, `toFixed`
 
 **Global:** `console.log`, `console.error`, `parseInt`, `parseFloat`, `Number()`, `String()`, `isNaN`, `typeof`, `process.exit`
 
-> Full list: [SUPPORTED.md](SUPPORTED.md)
+> Lista completa: [SUPPORTED.md](SUPPORTED.md)
 
-## Multi-file Modules
+## Modulos Multi-arquivo
 
 ```js
 // math.js
@@ -88,62 +91,62 @@ console.log(add(3, 5)); // 8
 node bin/js2nasm.js main.js --run
 ```
 
-Dependencies are resolved and merged automatically.
+Dependencias sao resolvidas e unificadas automaticamente.
 
-## npm Scripts
+## Scripts npm
 
-| Script | Description |
-|--------|-------------|
-| `npm test` | Run fixture tests (20 tests) |
-| `npm start -- file.js` | Compile + run |
-| `npm run build -- file.js` | Compile only |
-| `npm run emit:ir -- file.js` | Show IR output |
-| `npm run emit:ast -- file.js` | Show AST output |
-| `npm run test:all` | Run all tests |
+| Script | Descricao |
+|--------|-----------|
+| `npm test` | Rodar testes de fixture |
+| `npm start -- file.js` | Compilar + executar |
+| `npm run build -- file.js` | Apenas compilar |
+| `npm run emit:ir -- file.js` | Mostrar saida IR |
+| `npm run emit:ast -- file.js` | Mostrar saida AST |
+| `npm run test:all` | Rodar todos os testes |
 
-## Architecture
+## Arquitetura
 
 ```
 src/
-  index.js              # entry point, pipeline orchestration
-  ir.js                 # IR opcodes and instruction types
-  ir-generator.js       # AST → IR compiler (main dispatcher)
+  index.js              # ponto de entrada, orquestracao do pipeline
+  ir.js                 # opcodes IR e tipos de instrucao
+  ir-generator.js       # compilador AST → IR (dispatcher principal)
   ir-gen/
-    visit-expressions.js  # expressions, operators
-    visit-statements.js   # assignments, declarations
-    visit-functions.js    # functions, calls, methods
+    visit-expressions.js  # expressoes, operadores
+    visit-statements.js   # atribuicoes, declaracoes
+    visit-functions.js    # funcoes, chamadas, metodos, classes
     visit-control-flow.js # if, for, while, try/catch
-    visit-collections.js  # arrays, objects
+    visit-collections.js  # arrays, objetos, templates
     visit-modules.js      # import/export
-  analyzer.js           # type inference
-  codegen.js            # IR → NASM x86-64 compiler
+  analyzer.js           # inferencia de tipos
+  codegen.js            # compilador IR → NASM x86-64
   codegen/
-    emit-arrays.js        # array operations
-    emit-strings.js       # string operations
-    emit-objects.js       # object operations
-    emit-math.js          # math functions
+    emit-arrays.js        # operacoes de array
+    emit-strings.js       # operacoes de string
+    emit-objects.js       # operacoes de objeto
+    emit-math.js          # funcoes matematicas
     emit-io.js            # console.log/error
-    emit-helpers.js       # runtime helpers (__int_to_str, __print_array)
+    emit-helpers.js       # helpers de runtime (__int_to_str, __print_array)
     emit-exceptions.js    # try/catch/throw
-  module-resolver.js    # multi-file dependency resolution
+  module-resolver.js    # resolucao de dependencias multi-arquivo
 ```
 
-## Requirements
+## Requisitos
 
-- [Node.js](https://nodejs.org/) (for running the compiler)
-- [NASM](https://www.nasm.us/) (assembler — in PATH or `C:\Program Files\NASM\`)
-- [GoLink](http://godevtool.com/) (linker — in PATH or `tools/golink/`) or MSVC linker
+- [Node.js](https://nodejs.org/) (para rodar o compilador)
+- [NASM](https://www.nasm.us/) (assembler — no PATH ou `C:\Program Files\NASM\`)
+- [GoLink](http://godevtool.com/) (linker — no PATH ou `tools/golink/`) ou linker MSVC
 
 ```bash
 npm install
 ```
 
-## Limitations
+## Limitacoes
 
-Not supported: async/await, generators, RegExp, Map/Set, Symbols, Proxies, getters/setters, private fields, class inheritance, `for...in`.
+Nao suportado: async/await, generators, RegExp, Map/Set, Symbols, Proxies, campos privados (`#field`), tagged template literals, `import()` dinamico, `import.meta`, BigInt.
 
-See [SUPPORTED.md](SUPPORTED.md) for the complete feature list.
+Veja [SUPPORTED.md](SUPPORTED.md) para a lista completa de features.
 
-## License
+## Licenca
 
 MIT

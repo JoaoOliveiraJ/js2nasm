@@ -1,4 +1,4 @@
-// Test bitwise compound assignments
+// Testa atribuições compostas bitwise
 let x = 15;
 x &= 6;
 console.log(x);

@@ -1,4 +1,4 @@
-// expected: 42\nhello\n99\n100
+// esperado: 42\nhello\n99\n100
 let obj = { x: 42, y: "hello" };
 console.log(obj.x);
 console.log(obj.y);

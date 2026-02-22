@@ -9,13 +9,13 @@ function emitConsoleLog(argInfos) {
     const { temp, type } = argInfos[i];
     const isLast = (i === argInfos.length - 1);
 
-    // Print the value (with newline only on last arg)
+    // Imprime o valor (com nova linha apenas no último argumento)
     this.emitPrintValue(temp, type, isLast);
 
-    // Print space between args (if not last)
+    // Imprime espaço entre argumentos (se não for o último)
     if (!isLast) {
       this.instr('sub rsp, 32');
-      this.instr('mov rcx, 32'); // space character (0x20)
+      this.instr('mov rcx, 32'); // caractere de espaço (0x20)
       this.instr('call putchar');
       this.instr('add rsp, 32');
     }
@@ -66,7 +66,7 @@ function emitPrintValue(temp, type, withNewline) {
       break;
 
     default:
-      // Default: print as integer
+      // Padrão: imprime como inteiro
       this.instr(`lea rcx, [${withNewline ? 'fmt_int_nl' : 'fmt_int'}]`);
       this.instr(`mov rdx, ${this.loc(temp)}`);
       this.instr('call printf');

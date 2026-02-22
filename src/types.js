@@ -1,6 +1,6 @@
 'use strict';
 
-// Tagged value type tags
+// Tags de tipo para valores
 const TYPE_UNDEFINED = 0;
 const TYPE_NULL = 1;
 const TYPE_BOOL = 2;
@@ -10,10 +10,10 @@ const TYPE_STRING = 5;
 const TYPE_ARRAY = 6;
 const TYPE_FUNCTION = 7;
 
-// Value size in bytes (16-byte tagged values)
+// Tamanho do valor em bytes (valores tagueados de 16 bytes)
 const VALUE_SIZE = 16;
 
-// Tag names for debug output
+// Nomes das tags para saída de debug
 const TAG_NAMES = {
   [TYPE_UNDEFINED]: 'undefined',
   [TYPE_NULL]: 'null',

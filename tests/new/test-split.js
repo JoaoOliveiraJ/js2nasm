@@ -1,7 +1,7 @@
-// expected: 3
-// expected: a
-// expected: b
-// expected: c
+// esperado: 3
+// esperado: a
+// esperado: b
+// esperado: c
 let parts = "a,b,c".split(",");
 console.log(parts.length);
 console.log(parts[0]);
