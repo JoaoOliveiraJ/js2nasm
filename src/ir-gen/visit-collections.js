@@ -100,6 +100,35 @@ function visitMemberExpression(node) {
 
   // Non-computed property access: obj.prop
   if (!node.computed && node.property.type === 'Identifier') {
+    // Check if this is a getter access on a class instance
+    if (node.object.type === 'Identifier') {
+      const info = this.analyzer.currentScope.lookup(node.object.name);
+      if (info && info.className && this._isGetter(info.className, node.property.name)) {
+        const { temp: objTemp } = this.visitExpression(node.object);
+        let qualClsName = info.className;
+        const clsInfo = this.analyzer.currentScope.lookup(info.className);
+        if (clsInfo && clsInfo.qualifiedName) qualClsName = clsInfo.qualifiedName;
+        const getterName = this._resolveClassMethod(qualClsName, node.property.name);
+        const t = this.newTemp();
+        this.emit(OP.CALL, t, getterName, [{ temp: objTemp, type: TYPE_INT }]);
+        return { temp: t, type: TYPE_INT };
+      }
+    }
+    // Check if this.prop is a getter
+    if (node.object.type === 'Identifier' && node.object.name === 'this') {
+      const thisInfo = this.analyzer.currentScope.lookup('this');
+      if (thisInfo && thisInfo.className && this._isGetter(thisInfo.className, node.property.name)) {
+        const { temp: objTemp } = this.visitExpression(node.object);
+        let qualClsName = thisInfo.className;
+        const clsInfo = this.analyzer.currentScope.lookup(thisInfo.className);
+        if (clsInfo && clsInfo.qualifiedName) qualClsName = clsInfo.qualifiedName;
+        const getterName = this._resolveClassMethod(qualClsName, node.property.name);
+        const t = this.newTemp();
+        this.emit(OP.CALL, t, getterName, [{ temp: objTemp, type: TYPE_INT }]);
+        return { temp: t, type: TYPE_INT };
+      }
+    }
+
     const { temp: objTemp } = this.visitExpression(node.object);
     const keyLabel = this.program.addString(node.property.name);
     const t = this.newTemp();

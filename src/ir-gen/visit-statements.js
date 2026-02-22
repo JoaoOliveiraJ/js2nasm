@@ -521,6 +521,30 @@ function visitAssignment(node) {
   }
 
   // Member assignment: arr[i] = val, obj.prop = val, obj["key"] = val
+  // Check for setter: obj.prop = val → ClassName_prop(obj, val)
+  if (node.left.type === 'MemberExpression' && !node.left.computed &&
+      node.left.property.type === 'Identifier' && node.operator === '=') {
+    const leftObj = node.left.object;
+    if (leftObj.type === 'Identifier') {
+      const info = this.analyzer.currentScope.lookup(leftObj.name);
+      const clsName = info && info.className;
+      if (clsName && this._isSetter && this._isSetter(clsName, node.left.property.name)) {
+        const { temp: objTemp } = this.visitExpression(leftObj);
+        const { temp: rightTemp } = this.visitExpression(node.right);
+        let qualClsName = clsName;
+        const clsInfo = this.analyzer.currentScope.lookup(clsName);
+        if (clsInfo && clsInfo.qualifiedName) qualClsName = clsInfo.qualifiedName;
+        const setterName = this._resolveClassMethod(qualClsName, node.left.property.name);
+        const t = this.newTemp();
+        this.emit(OP.CALL, t, setterName, [
+          { temp: objTemp, type: TYPE_INT },
+          { temp: rightTemp, type: TYPE_INT }
+        ]);
+        return { temp: rightTemp, type: TYPE_INT };
+      }
+    }
+  }
+
   // Also handles compound: arr[i] += val, obj.prop -= val, etc.
   if (node.left.type === 'MemberExpression') {
     const { temp: objTemp } = this.visitExpression(node.left.object);

@@ -1320,7 +1320,26 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_BOOL };
     }
 
-    // Class method calls: obj.method(args) → ClassName_method(obj, args...)
+    // Static class method calls: ClassName.method(args) → ClassName_method(args)
+    if (obj.type === 'Identifier') {
+      const objInfo = this.analyzer.currentScope.lookup(obj.name);
+      if (objInfo && objInfo.type === TYPE_FUNCTION && objInfo.className === obj.name) {
+        // This is the class itself, not an instance — static method call
+        let qualClsName = obj.name;
+        if (objInfo.qualifiedName) qualClsName = objInfo.qualifiedName;
+        const fullMethodName = `${qualClsName}_${propName}`;
+        const args = [];
+        for (const arg of node.arguments) {
+          const { temp, type } = this.visitExpression(arg);
+          args.push({ temp, type });
+        }
+        const t = this.newTemp();
+        this.emit(OP.CALL, t, fullMethodName, args);
+        return { temp: t, type: TYPE_INT };
+      }
+    }
+
+    // Instance method calls: obj.method(args) → ClassName_method(obj, args...)
     if (obj.type === 'Identifier') {
       const objInfo = this.analyzer.currentScope.lookup(obj.name);
       if (objInfo && objInfo.className) {
@@ -1444,13 +1463,29 @@ function visitCallExpression(node) {
     }
   }
 
+  // IIFE or call on expression result: (function(x){...})(args), (() => x)(args)
+  if (node.callee.type === 'FunctionExpression' || node.callee.type === 'ArrowFunctionExpression') {
+    const exprResult = node.callee.type === 'FunctionExpression'
+      ? this.visitFunctionExpression(node.callee)
+      : this.visitArrowFunction(node.callee);
+    const funcName = exprResult.funcName;
+    const args = [];
+    for (const arg of node.arguments) {
+      const { temp, type } = this.visitExpression(arg);
+      args.push({ temp, type });
+    }
+    const t = this.newTemp();
+    this.emit(OP.CALL, t, funcName, args);
+    return { temp: t, type: TYPE_INT };
+  }
+
   // Regular function call
   let funcName = node.callee.name;
 
   // Resolve through importMap or qualified scope
-  if (this.importMap.has(funcName)) {
+  if (funcName && this.importMap.has(funcName)) {
     funcName = this.importMap.get(funcName);
-  } else {
+  } else if (funcName) {
     const info = this.analyzer.currentScope.lookup(funcName);
     if (info && info.qualifiedName) {
       funcName = info.qualifiedName;
@@ -1772,13 +1807,14 @@ function visitClassDeclaration(node) {
     if (method.type !== 'MethodDefinition') continue;
     const methodName = method.key.name || method.key.value;
     const fullName = `${qualifiedName}_${methodName}`;
+    const isStatic = method.static;
 
     const methodParams = method.value.params.map(p => {
       if (p.type === 'AssignmentPattern') return p.left.name;
       return p.name;
     });
-    // 'this' is the first parameter
-    const allParams = ['this', ...methodParams];
+    // For non-static, 'this' is the first parameter; for static, no 'this'
+    const allParams = isStatic ? methodParams : ['this', ...methodParams];
 
     const func = new IRFunction(fullName, allParams);
     func.restParamIndex = -1;
@@ -1792,16 +1828,19 @@ function visitClassDeclaration(node) {
     this._currentSuperClass = parentQualifiedName;
     this.analyzer.enterScope();
 
-    // Declare 'this' param
-    this.analyzer.currentScope.declare('this', { type: TYPE_INT, isConst: false, className });
-    this.emit(OP.PARAM, 'this', 0);
+    // Declare 'this' param (non-static only)
+    if (!isStatic) {
+      this.analyzer.currentScope.declare('this', { type: TYPE_INT, isConst: false, className });
+      this.emit(OP.PARAM, 'this', 0);
+    }
 
     // Declare method params
+    const paramOffset = isStatic ? 0 : 1;
     for (let i = 0; i < method.value.params.length; i++) {
       const p = method.value.params[i];
       const pName = p.type === 'AssignmentPattern' ? p.left.name : p.name;
       this.analyzer.currentScope.declare(pName, { type: TYPE_INT, isConst: false });
-      this.emit(OP.PARAM, pName, i + 1); // +1 because this is param 0
+      this.emit(OP.PARAM, pName, i + paramOffset);
 
       if (p.type === 'AssignmentPattern') {
         const endDefLabel = this.newLabel('enddefparam');
@@ -1827,6 +1866,15 @@ function visitClassDeclaration(node) {
   // Store method mapping info for method call resolution
   if (!this._classMethods) this._classMethods = {};
   this._classMethods[qualifiedName] = otherMethods.map(m => m.key.name || m.key.value);
+  // Store getter/setter info
+  if (!this._classGetters) this._classGetters = {};
+  if (!this._classSetters) this._classSetters = {};
+  this._classGetters[qualifiedName] = otherMethods
+    .filter(m => m.kind === 'get')
+    .map(m => m.key.name || m.key.value);
+  this._classSetters[qualifiedName] = otherMethods
+    .filter(m => m.kind === 'set')
+    .map(m => m.key.name || m.key.value);
 }
 
 function _isArrayLike(node) {
@@ -1866,6 +1914,28 @@ function _emitArrayDestructuring(paramName, pattern) {
     this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst: false });
     this.emit(OP.STORE_VAR, localName, valTemp);
   }
+}
+
+function _isGetter(className, propName) {
+  let cls = className;
+  while (cls) {
+    if (this._classGetters && this._classGetters[cls] && this._classGetters[cls].includes(propName)) {
+      return true;
+    }
+    cls = (this._classInheritance && this._classInheritance[cls]) || null;
+  }
+  return false;
+}
+
+function _isSetter(className, propName) {
+  let cls = className;
+  while (cls) {
+    if (this._classSetters && this._classSetters[cls] && this._classSetters[cls].includes(propName)) {
+      return true;
+    }
+    cls = (this._classInheritance && this._classInheritance[cls]) || null;
+  }
+  return false;
 }
 
 function _resolveClassMethod(qualClsName, methodName) {
@@ -1911,6 +1981,8 @@ module.exports = {
   visitNewExpression,
   visitClassDeclaration,
   _isArrayLike,
+  _isGetter,
+  _isSetter,
   _resolveClassMethod,
   _resolveCallbackName,
   _emitObjectDestructuring,
