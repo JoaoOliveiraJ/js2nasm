@@ -1,7 +1,7 @@
 'use strict';
 
 const { OP } = require('../ir');
-const { TYPE_INT } = require('../types');
+const { TYPE_INT, TYPE_STRING } = require('../types');
 
 function visitReturnStatement(node) {
   if (node.argument) {
@@ -120,16 +120,17 @@ function visitDoWhileStatement(node) {
 }
 
 function visitForOfStatement(node) {
-  // Desugar for...of array into index-based for loop
-  // for (let x of arr) → for (let _i = 0; _i < arr.length; _i++) { let x = arr[_i]; ... }
+  // Desugar for...of into index-based for loop
+  // Supports both arrays and strings
   const iterLabel = this.newLabel('forof');
   const updateLabel = this.newLabel('forof_upd');
   const endLabel = this.newLabel('endforof');
 
   this.loopStack.push({ continueLabel: updateLabel, breakLabel: endLabel });
 
-  // Get the array
-  const { temp: arrTemp } = this.visitExpression(node.right);
+  // Get the iterable
+  const { temp: iterTemp, type: iterType } = this.visitExpression(node.right);
+  const isString = iterType === TYPE_STRING;
 
   // Create index variable
   const idxName = `_forof_idx_${this.labelCounter}`;
@@ -140,27 +141,46 @@ function visitForOfStatement(node) {
   // Loop start
   this.emit(OP.LABEL, iterLabel);
 
-  // Test: idx < arr.length
+  // Test: idx < iterable.length
   const lenTemp = this.newTemp();
-  this.emit(OP.ARRAY_LENGTH, lenTemp, arrTemp);
+  if (isString) {
+    this.emit(OP.STR_LENGTH, lenTemp, iterTemp);
+  } else {
+    this.emit(OP.ARRAY_LENGTH, lenTemp, iterTemp);
+  }
   const idxLoad = this.newTemp();
   this.emit(OP.LOAD_VAR, idxLoad, idxName);
   const cmpTemp = this.newTemp();
   this.emit(OP.CMP_LT, cmpTemp, idxLoad, lenTemp);
   this.emit(OP.JUMP_IF_FALSE, cmpTemp, endLabel);
 
-  // Declare loop variable: let x = arr[idx]
+  // Declare loop variable: let x = iterable[idx]
   const elemTemp = this.newTemp();
   const idxLoad2 = this.newTemp();
   this.emit(OP.LOAD_VAR, idxLoad2, idxName);
-  this.emit(OP.ARRAY_GET, elemTemp, arrTemp, idxLoad2);
+  if (isString) {
+    this.emit(OP.STR_CHAR_AT, elemTemp, iterTemp, idxLoad2);
+  } else {
+    this.emit(OP.ARRAY_GET, elemTemp, iterTemp, idxLoad2);
+  }
 
-  const varName = node.left.type === 'VariableDeclaration'
-    ? node.left.declarations[0].id.name
-    : node.left.name;
-
-  this.analyzer.currentScope.declare(varName, { type: TYPE_INT, isConst: false });
-  this.emit(OP.STORE_VAR, varName, elemTemp);
+  // Handle destructuring in loop variable
+  const leftDecl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
+  if (leftDecl && leftDecl.id.type === 'ArrayPattern') {
+    const tempName = `_forof_elem_${this.labelCounter}`;
+    this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+    this.emit(OP.STORE_VAR, tempName, elemTemp);
+    this._emitArrayDestructuringDecl(tempName, leftDecl.id, false);
+  } else if (leftDecl && leftDecl.id.type === 'ObjectPattern') {
+    const tempName = `_forof_elem_${this.labelCounter}`;
+    this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+    this.emit(OP.STORE_VAR, tempName, elemTemp);
+    this._emitObjectDestructuringDecl(tempName, leftDecl.id, false);
+  } else {
+    const varName = leftDecl ? leftDecl.id.name : node.left.name;
+    this.analyzer.currentScope.declare(varName, { type: isString ? TYPE_STRING : TYPE_INT, isConst: false });
+    this.emit(OP.STORE_VAR, varName, elemTemp);
+  }
 
   // Body
   this.visitStatement(node.body);

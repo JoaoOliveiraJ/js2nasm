@@ -1054,6 +1054,37 @@ function visitCallExpression(node) {
         this.emit(OP.OBJ_ENTRIES, t, objTemp);
         return { temp: t, type: TYPE_ARRAY };
       }
+      if (propName === 'assign') {
+        // Object.assign(target, ...sources) — copy properties from sources to target
+        const { temp: targetTemp } = this.visitExpression(node.arguments[0]);
+        for (let i = 1; i < node.arguments.length; i++) {
+          const { temp: srcTemp } = this.visitExpression(node.arguments[i]);
+          this.emit(OP.OBJ_SPREAD, targetTemp, srcTemp);
+        }
+        return { temp: targetTemp, type: TYPE_INT };
+      }
+    }
+
+    // Array.from() — creates a new array from an iterable (array or string)
+    if (obj.type === 'Identifier' && obj.name === 'Array' && propName === 'from') {
+      const { temp: srcTemp, type: srcType } = this.visitExpression(node.arguments[0]);
+      if (srcType === TYPE_STRING) {
+        // String → array of single-char strings (use split with empty string)
+        const sepTemp = this.newTemp();
+        const label = this.program.addString('');
+        this.emit(OP.LOAD_STRING, sepTemp, label);
+        const t = this.newTemp();
+        this.emit(OP.STR_SPLIT, t, srcTemp, sepTemp);
+        return { temp: t, type: TYPE_ARRAY };
+      }
+      // Array → shallow copy via slice(0, length)
+      const startTemp = this.newTemp();
+      this.emit(OP.LOAD_INT, startTemp, 0);
+      const lenTemp = this.newTemp();
+      this.emit(OP.ARRAY_LENGTH, lenTemp, srcTemp);
+      const t = this.newTemp();
+      this.emit(OP.ARRAY_SLICE, t, srcTemp, startTemp, lenTemp);
+      return { temp: t, type: TYPE_ARRAY };
     }
 
     // Array.isArray()
@@ -1293,14 +1324,15 @@ function visitCallExpression(node) {
     if (obj.type === 'Identifier') {
       const objInfo = this.analyzer.currentScope.lookup(obj.name);
       if (objInfo && objInfo.className) {
-        const clsName = objInfo.qualifiedName ? objInfo.className : objInfo.className;
+        const clsName = objInfo.className;
         // Resolve qualified class name
         let qualClsName = clsName;
         const clsInfo = this.analyzer.currentScope.lookup(clsName);
         if (clsInfo && clsInfo.qualifiedName) {
           qualClsName = clsInfo.qualifiedName;
         }
-        const fullMethodName = `${qualClsName}_${propName}`;
+        // Walk inheritance chain to find the method
+        const fullMethodName = this._resolveClassMethod(qualClsName, propName);
         const { temp: objTemp } = this.visitExpression(obj);
         const args = [{ temp: objTemp, type: TYPE_INT }]; // 'this' as first arg
         for (const arg of node.arguments) {
@@ -1322,7 +1354,8 @@ function visitCallExpression(node) {
         if (clsInfo && clsInfo.qualifiedName) {
           qualClsName = clsInfo.qualifiedName;
         }
-        const fullMethodName = `${qualClsName}_${propName}`;
+        // Walk inheritance chain to find the method
+        const fullMethodName = this._resolveClassMethod(qualClsName, propName);
         const { temp: objTemp } = this.visitExpression(obj);
         const args = [{ temp: objTemp, type: TYPE_INT }];
         for (const arg of node.arguments) {
@@ -1334,6 +1367,45 @@ function visitCallExpression(node) {
         return { temp: t, type: TYPE_INT };
       }
     }
+  }
+
+  // super() call in constructor — call parent constructor
+  if (node.callee.type === 'Super') {
+    if (this._currentSuperClass) {
+      const args = [];
+      for (const arg of node.arguments) {
+        const { temp, type } = this.visitExpression(arg);
+        args.push({ temp, type });
+      }
+      // Call parent constructor, get the parent object
+      const parentObj = this.newTemp();
+      this.emit(OP.CALL, parentObj, this._currentSuperClass, args);
+      // Copy all properties from parent object to 'this'
+      const thisTemp = this.newTemp();
+      this.emit(OP.LOAD_VAR, thisTemp, 'this');
+      this.emit(OP.OBJ_SPREAD, thisTemp, parentObj);
+      return { temp: thisTemp, type: TYPE_INT };
+    }
+    throw new Error('super() called outside of a class constructor');
+  }
+
+  // super.method() call — call parent class method
+  if (node.callee.type === 'MemberExpression' && node.callee.object.type === 'Super') {
+    if (this._currentSuperClass) {
+      const methodName = node.callee.property.name;
+      const fullMethodName = `${this._currentSuperClass}_${methodName}`;
+      const thisTemp = this.newTemp();
+      this.emit(OP.LOAD_VAR, thisTemp, 'this');
+      const args = [{ temp: thisTemp, type: TYPE_INT }]; // 'this' as first arg
+      for (const arg of node.arguments) {
+        const { temp, type } = this.visitExpression(arg);
+        args.push({ temp, type });
+      }
+      const t = this.newTemp();
+      this.emit(OP.CALL, t, fullMethodName, args);
+      return { temp: t, type: TYPE_INT };
+    }
+    throw new Error('super.method() called outside of a class');
   }
 
   // Global builtins: parseInt, parseFloat, Number, String, isNaN
@@ -1596,8 +1668,25 @@ function visitClassDeclaration(node) {
   const className = node.id.name;
   const qualifiedName = (!this.inFunction && this.moduleId) ? this.qualifyName(className) : className;
 
+  // Handle extends
+  let parentClassName = null;
+  let parentQualifiedName = null;
+  if (node.superClass) {
+    parentClassName = node.superClass.name;
+    const parentInfo = this.analyzer.currentScope.lookup(parentClassName);
+    parentQualifiedName = (parentInfo && parentInfo.qualifiedName) || parentClassName;
+  }
+
   // Register class name as a function in scope
-  this.analyzer.currentScope.declare(className, { type: TYPE_FUNCTION, isConst: true, qualifiedName, className });
+  const classInfo = { type: TYPE_FUNCTION, isConst: true, qualifiedName, className };
+  if (parentClassName) classInfo.parentClass = parentQualifiedName;
+  this.analyzer.currentScope.declare(className, classInfo);
+
+  // Store inheritance chain
+  if (!this._classInheritance) this._classInheritance = {};
+  if (parentClassName) {
+    this._classInheritance[qualifiedName] = parentQualifiedName;
+  }
 
   const methods = node.body.body; // ClassBody → MethodDefinition[]
 
@@ -1628,8 +1717,10 @@ function visitClassDeclaration(node) {
 
     const prevInstructions = this.currentInstructions;
     const prevInFunction = this.inFunction;
+    const prevSuperClass = this._currentSuperClass;
     this.currentInstructions = func.body;
     this.inFunction = true;
+    this._currentSuperClass = parentQualifiedName;
     this.analyzer.enterScope();
 
     // Declare params
@@ -1657,6 +1748,7 @@ function visitClassDeclaration(node) {
     this.emit(OP.STORE_VAR, 'this', thisTemp);
 
     // Visit constructor body
+    // super(args) calls are handled inside visitCallExpression via _currentSuperClass
     if (constructorNode) {
       for (const stmt of constructorNode.value.body.body) {
         this.visitStatement(stmt);
@@ -1672,6 +1764,7 @@ function visitClassDeclaration(node) {
     this.analyzer.exitScope();
     this.currentInstructions = prevInstructions;
     this.inFunction = prevInFunction;
+    this._currentSuperClass = prevSuperClass;
   }
 
   // Generate method functions: ClassName_methodName(this, params...)
@@ -1693,8 +1786,10 @@ function visitClassDeclaration(node) {
 
     const prevInstructions = this.currentInstructions;
     const prevInFunction = this.inFunction;
+    const prevSuperClass = this._currentSuperClass;
     this.currentInstructions = func.body;
     this.inFunction = true;
+    this._currentSuperClass = parentQualifiedName;
     this.analyzer.enterScope();
 
     // Declare 'this' param
@@ -1726,10 +1821,10 @@ function visitClassDeclaration(node) {
     this.analyzer.exitScope();
     this.currentInstructions = prevInstructions;
     this.inFunction = prevInFunction;
+    this._currentSuperClass = prevSuperClass;
   }
 
   // Store method mapping info for method call resolution
-  // We track which methods belong to which class
   if (!this._classMethods) this._classMethods = {};
   this._classMethods[qualifiedName] = otherMethods.map(m => m.key.name || m.key.value);
 }
@@ -1773,6 +1868,22 @@ function _emitArrayDestructuring(paramName, pattern) {
   }
 }
 
+function _resolveClassMethod(qualClsName, methodName) {
+  // Walk the inheritance chain to find where the method is defined
+  let cls = qualClsName;
+  while (cls) {
+    if (this._classMethods && this._classMethods[cls]) {
+      if (this._classMethods[cls].includes(methodName)) {
+        return `${cls}_${methodName}`;
+      }
+    }
+    // Walk to parent
+    cls = (this._classInheritance && this._classInheritance[cls]) || null;
+  }
+  // Default: assume it's on the current class (may fail at link time)
+  return `${qualClsName}_${methodName}`;
+}
+
 function _resolveCallbackName(callbackNode) {
   if (callbackNode.type === 'ArrowFunctionExpression') {
     const result = this.visitArrowFunction(callbackNode);
@@ -1800,6 +1911,7 @@ module.exports = {
   visitNewExpression,
   visitClassDeclaration,
   _isArrayLike,
+  _resolveClassMethod,
   _resolveCallbackName,
   _emitObjectDestructuring,
   _emitArrayDestructuring,

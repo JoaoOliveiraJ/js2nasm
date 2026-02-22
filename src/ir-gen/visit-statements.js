@@ -13,12 +13,77 @@ function visitVariableDeclaration(node) {
       for (let i = 0; i < decl.id.elements.length; i++) {
         const elem = decl.id.elements[i];
         if (!elem) continue; // skip holes
-        const elemName = elem.name;
-        const name = (!this.inFunction && this.moduleId) ? this.qualifyName(elemName) : elemName;
+
+        // RestElement: const [a, ...rest] = arr
+        if (elem.type === 'RestElement') {
+          const restName = elem.argument.name;
+          const name = (!this.inFunction && this.moduleId) ? this.qualifyName(restName) : restName;
+          const startTemp = this.newTemp();
+          this.emit(OP.LOAD_INT, startTemp, i);
+          const lenTemp = this.newTemp();
+          this.emit(OP.ARRAY_LENGTH, lenTemp, arrTemp);
+          const restArr = this.newTemp();
+          this.emit(OP.ARRAY_SLICE, restArr, arrTemp, startTemp, lenTemp);
+          this.analyzer.currentScope.declare(restName, { type: TYPE_ARRAY, isConst, qualifiedName: name });
+          if (!this.inFunction) this.program.globals.add(name);
+          this.emit(OP.STORE_VAR, name, restArr);
+          break; // rest must be last
+        }
+
+        // AssignmentPattern: const [a = defaultVal] = arr — check bounds first
+        if (elem.type === 'AssignmentPattern') {
+          const elemName = elem.left.name;
+          const name = (!this.inFunction && this.moduleId) ? this.qualifyName(elemName) : elemName;
+          this.analyzer.currentScope.declare(elemName, { type: TYPE_INT, isConst, qualifiedName: name });
+          if (!this.inFunction) this.program.globals.add(name);
+          // Check if index i is within array bounds
+          const lenTemp = this.newTemp();
+          this.emit(OP.ARRAY_LENGTH, lenTemp, arrTemp);
+          const idxTemp = this.newTemp();
+          this.emit(OP.LOAD_INT, idxTemp, i);
+          const inBounds = this.newTemp();
+          this.emit(OP.CMP_GT, inBounds, lenTemp, idxTemp);
+          const useElemLabel = this.newLabel('arrdef_elem');
+          const endDefLabel = this.newLabel('arrdef_end');
+          this.emit(OP.JUMP_IF_TRUE, inBounds, useElemLabel);
+          // Out of bounds: use default
+          const { temp: defVal } = this.visitExpression(elem.right);
+          this.emit(OP.STORE_VAR, name, defVal);
+          this.emit(OP.JUMP, endDefLabel);
+          // In bounds: use array element
+          this.emit(OP.LABEL, useElemLabel);
+          const valTemp = this.newTemp();
+          this.emit(OP.ARRAY_GET, valTemp, arrTemp, idxTemp);
+          this.emit(OP.STORE_VAR, name, valTemp);
+          this.emit(OP.LABEL, endDefLabel);
+          continue;
+        }
+
         const idxTemp = this.newTemp();
         this.emit(OP.LOAD_INT, idxTemp, i);
         const valTemp = this.newTemp();
         this.emit(OP.ARRAY_GET, valTemp, arrTemp, idxTemp);
+
+        // Nested array destructuring: const [a, [b, c]] = arr
+        if (elem.type === 'ArrayPattern') {
+          const tempName = `_nested_arr_${this.labelCounter++}`;
+          this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+          this.emit(OP.STORE_VAR, tempName, valTemp);
+          this._emitArrayDestructuringDecl(tempName, elem, isConst);
+          continue;
+        }
+
+        // Nested object destructuring: const [{ x }] = arr
+        if (elem.type === 'ObjectPattern') {
+          const tempName = `_nested_obj_${this.labelCounter++}`;
+          this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+          this.emit(OP.STORE_VAR, tempName, valTemp);
+          this._emitObjectDestructuringDecl(tempName, elem, isConst);
+          continue;
+        }
+
+        const elemName = elem.name;
+        const name = (!this.inFunction && this.moduleId) ? this.qualifyName(elemName) : elemName;
         this.analyzer.currentScope.declare(elemName, { type: TYPE_INT, isConst, qualifiedName: name });
         if (!this.inFunction) this.program.globals.add(name);
         this.emit(OP.STORE_VAR, name, valTemp);
@@ -30,12 +95,62 @@ function visitVariableDeclaration(node) {
     if (decl.id.type === 'ObjectPattern') {
       const { temp: objTemp } = this.visitExpression(decl.init);
       for (const prop of decl.id.properties) {
+        // RestElement: const { a, ...rest } = obj
+        if (prop.type === 'RestElement') {
+          // Not yet supported — skip
+          continue;
+        }
+
         const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
-        const localName = prop.value.type === 'Identifier' ? prop.value.name : prop.key.name;
-        const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
         const keyLabel = this.program.addString(keyName);
         const valTemp = this.newTemp();
         this.emit(OP.OBJ_GET, valTemp, objTemp, keyLabel);
+
+        const target = prop.value || prop.key;
+
+        // Default value: const { x = 10 } = obj — check key existence
+        if (target.type === 'AssignmentPattern') {
+          const localName = target.left.name;
+          const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
+          this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
+          if (!this.inFunction) this.program.globals.add(name);
+          // Check if key exists in object
+          const hasKey = this.newTemp();
+          this.emit(OP.OBJ_HAS_OWN, hasKey, objTemp, keyLabel);
+          const useValLabel = this.newLabel('objdef_val');
+          const endDefLabel = this.newLabel('objdef_end');
+          this.emit(OP.JUMP_IF_TRUE, hasKey, useValLabel);
+          // Key doesn't exist: use default
+          const { temp: defVal } = this.visitExpression(target.right);
+          this.emit(OP.STORE_VAR, name, defVal);
+          this.emit(OP.JUMP, endDefLabel);
+          // Key exists: use value from object
+          this.emit(OP.LABEL, useValLabel);
+          this.emit(OP.STORE_VAR, name, valTemp);
+          this.emit(OP.LABEL, endDefLabel);
+          continue;
+        }
+
+        // Nested object destructuring: const { a: { b } } = obj
+        if (target.type === 'ObjectPattern') {
+          const tempName = `_nested_obj_${this.labelCounter++}`;
+          this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+          this.emit(OP.STORE_VAR, tempName, valTemp);
+          this._emitObjectDestructuringDecl(tempName, target, isConst);
+          continue;
+        }
+
+        // Nested array destructuring: const { a: [b, c] } = obj
+        if (target.type === 'ArrayPattern') {
+          const tempName = `_nested_arr_${this.labelCounter++}`;
+          this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+          this.emit(OP.STORE_VAR, tempName, valTemp);
+          this._emitArrayDestructuringDecl(tempName, target, isConst);
+          continue;
+        }
+
+        const localName = target.type === 'Identifier' ? target.name : keyName;
+        const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
         this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
         if (!this.inFunction) this.program.globals.add(name);
         this.emit(OP.STORE_VAR, name, valTemp);
@@ -300,6 +415,111 @@ function visitAssignment(node) {
     }
   }
 
+  // Array destructuring assignment: [a, b] = [b, a]
+  if (node.left.type === 'ArrayPattern') {
+    const { temp: arrTemp } = this.visitExpression(node.right);
+    for (let i = 0; i < node.left.elements.length; i++) {
+      const elem = node.left.elements[i];
+      if (!elem) continue; // skip holes
+      const idxTemp = this.newTemp();
+      this.emit(OP.LOAD_INT, idxTemp, i);
+      const valTemp = this.newTemp();
+      this.emit(OP.ARRAY_GET, valTemp, arrTemp, idxTemp);
+
+      if (elem.type === 'Identifier') {
+        let name = elem.name;
+        const info = this.analyzer.currentScope.lookup(name);
+        if (info && info.qualifiedName) name = info.qualifiedName;
+        this.emit(OP.STORE_VAR, name, valTemp);
+      } else if (elem.type === 'MemberExpression') {
+        // [obj.prop] = arr
+        const { temp: objTemp } = this.visitExpression(elem.object);
+        if (elem.computed) {
+          const { temp: keyTemp } = this.visitExpression(elem.property);
+          this.emit(OP.ARRAY_SET, objTemp, keyTemp, valTemp);
+        } else {
+          const keyLabel = this.program.addString(elem.property.name);
+          this.emit(OP.OBJ_SET, objTemp, keyLabel, valTemp);
+        }
+      } else if (elem.type === 'AssignmentPattern') {
+        // [a = defaultVal] = arr — check bounds
+        let name = elem.left.name;
+        const eInfo = this.analyzer.currentScope.lookup(name);
+        if (eInfo && eInfo.qualifiedName) name = eInfo.qualifiedName;
+        const lenTemp2 = this.newTemp();
+        this.emit(OP.ARRAY_LENGTH, lenTemp2, arrTemp);
+        const idxTemp2 = this.newTemp();
+        this.emit(OP.LOAD_INT, idxTemp2, i);
+        const inBounds = this.newTemp();
+        this.emit(OP.CMP_GT, inBounds, lenTemp2, idxTemp2);
+        const useElemLabel = this.newLabel('adef_elem');
+        const endLabel = this.newLabel('adef_end');
+        this.emit(OP.JUMP_IF_TRUE, inBounds, useElemLabel);
+        const { temp: defVal } = this.visitExpression(elem.right);
+        this.emit(OP.STORE_VAR, name, defVal);
+        this.emit(OP.JUMP, endLabel);
+        this.emit(OP.LABEL, useElemLabel);
+        this.emit(OP.STORE_VAR, name, valTemp);
+        this.emit(OP.LABEL, endLabel);
+      } else if (elem.type === 'RestElement') {
+        // [...rest] = arr — collect remaining elements
+        const restName = elem.argument.name;
+        const info = this.analyzer.currentScope.lookup(restName);
+        let name = restName;
+        if (info && info.qualifiedName) name = info.qualifiedName;
+        const restArr = this.newTemp();
+        const startTemp = this.newTemp();
+        this.emit(OP.LOAD_INT, startTemp, i);
+        const lenTemp = this.newTemp();
+        this.emit(OP.ARRAY_LENGTH, lenTemp, arrTemp);
+        this.emit(OP.ARRAY_SLICE, restArr, arrTemp, startTemp, lenTemp);
+        this.emit(OP.STORE_VAR, name, restArr);
+        break; // rest must be last
+      }
+    }
+    return { temp: arrTemp, type: TYPE_ARRAY };
+  }
+
+  // Object destructuring assignment: ({x, y} = obj)
+  if (node.left.type === 'ObjectPattern') {
+    const { temp: objTemp } = this.visitExpression(node.right);
+    for (const prop of node.left.properties) {
+      if (prop.type === 'RestElement') {
+        // {...rest} = obj — not implemented yet
+        continue;
+      }
+      const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+      const keyLabel = this.program.addString(keyName);
+      const valTemp = this.newTemp();
+      this.emit(OP.OBJ_GET, valTemp, objTemp, keyLabel);
+
+      const target = prop.value || prop.key;
+      if (target.type === 'Identifier') {
+        let name = target.name;
+        const info = this.analyzer.currentScope.lookup(name);
+        if (info && info.qualifiedName) name = info.qualifiedName;
+        this.emit(OP.STORE_VAR, name, valTemp);
+      } else if (target.type === 'AssignmentPattern') {
+        // { x = defaultVal } = obj — check key existence
+        let name = target.left.name;
+        const oInfo = this.analyzer.currentScope.lookup(name);
+        if (oInfo && oInfo.qualifiedName) name = oInfo.qualifiedName;
+        const hasKey = this.newTemp();
+        this.emit(OP.OBJ_HAS_OWN, hasKey, objTemp, keyLabel);
+        const useValLabel = this.newLabel('odef_val');
+        const endLabel = this.newLabel('odef_end');
+        this.emit(OP.JUMP_IF_TRUE, hasKey, useValLabel);
+        const { temp: defVal } = this.visitExpression(target.right);
+        this.emit(OP.STORE_VAR, name, defVal);
+        this.emit(OP.JUMP, endLabel);
+        this.emit(OP.LABEL, useValLabel);
+        this.emit(OP.STORE_VAR, name, valTemp);
+        this.emit(OP.LABEL, endLabel);
+      }
+    }
+    return { temp: objTemp, type: TYPE_INT };
+  }
+
   // Member assignment: arr[i] = val, obj.prop = val, obj["key"] = val
   // Also handles compound: arr[i] += val, obj.prop -= val, etc.
   if (node.left.type === 'MemberExpression') {
@@ -382,6 +602,144 @@ function visitAssignment(node) {
   throw new Error(`Unsupported assignment: ${node.operator} to ${node.left.type}`);
 }
 
+function _emitArrayDestructuringDecl(srcVarName, pattern, isConst) {
+  for (let i = 0; i < pattern.elements.length; i++) {
+    const elem = pattern.elements[i];
+    if (!elem) continue;
+
+    if (elem.type === 'RestElement') {
+      const restName = elem.argument.name;
+      const name = (!this.inFunction && this.moduleId) ? this.qualifyName(restName) : restName;
+      const srcTemp = this.newTemp();
+      this.emit(OP.LOAD_VAR, srcTemp, srcVarName);
+      const startTemp = this.newTemp();
+      this.emit(OP.LOAD_INT, startTemp, i);
+      const lenTemp = this.newTemp();
+      this.emit(OP.ARRAY_LENGTH, lenTemp, srcTemp);
+      const restArr = this.newTemp();
+      this.emit(OP.ARRAY_SLICE, restArr, srcTemp, startTemp, lenTemp);
+      this.analyzer.currentScope.declare(restName, { type: TYPE_ARRAY, isConst, qualifiedName: name });
+      if (!this.inFunction) this.program.globals.add(name);
+      this.emit(OP.STORE_VAR, name, restArr);
+      break;
+    }
+
+    if (elem.type === 'AssignmentPattern') {
+      const localName = elem.left.name;
+      const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
+      this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
+      if (!this.inFunction) this.program.globals.add(name);
+      // Check bounds
+      const srcTemp0 = this.newTemp();
+      this.emit(OP.LOAD_VAR, srcTemp0, srcVarName);
+      const lenTemp = this.newTemp();
+      this.emit(OP.ARRAY_LENGTH, lenTemp, srcTemp0);
+      const idxTemp0 = this.newTemp();
+      this.emit(OP.LOAD_INT, idxTemp0, i);
+      const inBounds = this.newTemp();
+      this.emit(OP.CMP_GT, inBounds, lenTemp, idxTemp0);
+      const useElemLabel = this.newLabel('nadef_elem');
+      const endDefLabel = this.newLabel('nadef_end');
+      this.emit(OP.JUMP_IF_TRUE, inBounds, useElemLabel);
+      const { temp: defVal } = this.visitExpression(elem.right);
+      this.emit(OP.STORE_VAR, name, defVal);
+      this.emit(OP.JUMP, endDefLabel);
+      this.emit(OP.LABEL, useElemLabel);
+      const valTemp0 = this.newTemp();
+      this.emit(OP.ARRAY_GET, valTemp0, srcTemp0, idxTemp0);
+      this.emit(OP.STORE_VAR, name, valTemp0);
+      this.emit(OP.LABEL, endDefLabel);
+      continue;
+    }
+
+    const srcTemp = this.newTemp();
+    this.emit(OP.LOAD_VAR, srcTemp, srcVarName);
+    const idxTemp = this.newTemp();
+    this.emit(OP.LOAD_INT, idxTemp, i);
+    const valTemp = this.newTemp();
+    this.emit(OP.ARRAY_GET, valTemp, srcTemp, idxTemp);
+
+    if (elem.type === 'ArrayPattern') {
+      const tempName = `_nested_arr_${this.labelCounter++}`;
+      this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+      this.emit(OP.STORE_VAR, tempName, valTemp);
+      this._emitArrayDestructuringDecl(tempName, elem, isConst);
+      continue;
+    }
+
+    if (elem.type === 'ObjectPattern') {
+      const tempName = `_nested_obj_${this.labelCounter++}`;
+      this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+      this.emit(OP.STORE_VAR, tempName, valTemp);
+      this._emitObjectDestructuringDecl(tempName, elem, isConst);
+      continue;
+    }
+
+    const localName = elem.name;
+    const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
+    this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
+    if (!this.inFunction) this.program.globals.add(name);
+    this.emit(OP.STORE_VAR, name, valTemp);
+  }
+}
+
+function _emitObjectDestructuringDecl(srcVarName, pattern, isConst) {
+  for (const prop of pattern.properties) {
+    if (prop.type === 'RestElement') continue;
+
+    const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+    const keyLabel = this.program.addString(keyName);
+    const srcTemp = this.newTemp();
+    this.emit(OP.LOAD_VAR, srcTemp, srcVarName);
+    const valTemp = this.newTemp();
+    this.emit(OP.OBJ_GET, valTemp, srcTemp, keyLabel);
+
+    const target = prop.value || prop.key;
+
+    if (target.type === 'AssignmentPattern') {
+      const localName = target.left.name;
+      const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
+      this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
+      if (!this.inFunction) this.program.globals.add(name);
+      // Check key existence
+      const hasKey = this.newTemp();
+      this.emit(OP.OBJ_HAS_OWN, hasKey, srcTemp, keyLabel);
+      const useValLabel = this.newLabel('nodef_val');
+      const endDefLabel = this.newLabel('nodef_end');
+      this.emit(OP.JUMP_IF_TRUE, hasKey, useValLabel);
+      const { temp: defVal } = this.visitExpression(target.right);
+      this.emit(OP.STORE_VAR, name, defVal);
+      this.emit(OP.JUMP, endDefLabel);
+      this.emit(OP.LABEL, useValLabel);
+      this.emit(OP.STORE_VAR, name, valTemp);
+      this.emit(OP.LABEL, endDefLabel);
+      continue;
+    }
+
+    if (target.type === 'ObjectPattern') {
+      const tempName = `_nested_obj_${this.labelCounter++}`;
+      this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+      this.emit(OP.STORE_VAR, tempName, valTemp);
+      this._emitObjectDestructuringDecl(tempName, target, isConst);
+      continue;
+    }
+
+    if (target.type === 'ArrayPattern') {
+      const tempName = `_nested_arr_${this.labelCounter++}`;
+      this.analyzer.currentScope.declare(tempName, { type: TYPE_INT, isConst: false });
+      this.emit(OP.STORE_VAR, tempName, valTemp);
+      this._emitArrayDestructuringDecl(tempName, target, isConst);
+      continue;
+    }
+
+    const localName = target.type === 'Identifier' ? target.name : keyName;
+    const name = (!this.inFunction && this.moduleId) ? this.qualifyName(localName) : localName;
+    this.analyzer.currentScope.declare(localName, { type: TYPE_INT, isConst, qualifiedName: name });
+    if (!this.inFunction) this.program.globals.add(name);
+    this.emit(OP.STORE_VAR, name, valTemp);
+  }
+}
+
 module.exports = {
   visitVariableDeclaration,
   visitExpressionStatement,
@@ -389,4 +747,6 @@ module.exports = {
   visitConsoleLog,
   visitConsoleError,
   visitProcessExit,
+  _emitArrayDestructuringDecl,
+  _emitObjectDestructuringDecl,
 };
