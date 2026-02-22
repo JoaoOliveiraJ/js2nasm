@@ -347,6 +347,41 @@ class CodeGenerator {
         case OP.MATH_MAX:
         case OP.MATH_MIN:
         case OP.MATH_POW:
+        case OP.MATH_ATAN2:
+          this.getOffset(ops[0]);
+          break;
+        case OP.MATH_ROUND:
+        case OP.MATH_CEIL:
+        case OP.MATH_TRUNC:
+        case OP.MATH_SIGN:
+        case OP.MATH_LOG:
+        case OP.MATH_LOG2:
+        case OP.MATH_SIN:
+        case OP.MATH_COS:
+        case OP.MATH_TAN:
+        case OP.MATH_CLAMP32:
+          this.getOffset(ops[0]);
+          break;
+        case OP.MATH_RANDOM:
+          this.getOffset(ops[0]);
+          break;
+        case OP.STR_CHAR_CODE_AT:
+        case OP.STR_PAD_START:
+        case OP.STR_PAD_END:
+        case OP.STR_TRIM_START:
+        case OP.STR_TRIM_END:
+        case OP.STR_REPLACE_ALL:
+        case OP.STR_FROM_CHAR_CODE:
+          this.getOffset(ops[0]);
+          break;
+        case OP.NUM_IS_INTEGER:
+        case OP.NUM_IS_FINITE:
+        case OP.NUM_TO_FIXED:
+          this.getOffset(ops[0]);
+          break;
+        case OP.ARRAY_SPLICE:
+        case OP.ARRAY_FILL:
+        case OP.ARRAY_FLAT:
           this.getOffset(ops[0]);
           break;
         case OP.BIT_AND:
@@ -606,6 +641,42 @@ class CodeGenerator {
       case OP.MATH_SQRT:
         this.emitMathSqrt(ops[0], ops[1]);
         break;
+      case OP.MATH_ROUND:
+        this.emitMathRound(ops[0], ops[1]);
+        break;
+      case OP.MATH_CEIL:
+        this.emitMathCeil(ops[0], ops[1]);
+        break;
+      case OP.MATH_TRUNC:
+        this.emitMathTrunc(ops[0], ops[1]);
+        break;
+      case OP.MATH_SIGN:
+        this.emitMathSign(ops[0], ops[1]);
+        break;
+      case OP.MATH_RANDOM:
+        this.emitMathRandom(ops[0]);
+        break;
+      case OP.MATH_LOG:
+        this.emitMathLog(ops[0], ops[1]);
+        break;
+      case OP.MATH_LOG2:
+        this.emitMathLog2(ops[0], ops[1]);
+        break;
+      case OP.MATH_SIN:
+        this.emitMathSin(ops[0], ops[1]);
+        break;
+      case OP.MATH_COS:
+        this.emitMathCos(ops[0], ops[1]);
+        break;
+      case OP.MATH_TAN:
+        this.emitMathTan(ops[0], ops[1]);
+        break;
+      case OP.MATH_ATAN2:
+        this.emitMathAtan2(ops[0], ops[1], ops[2]);
+        break;
+      case OP.MATH_CLAMP32:
+        this.emitMathClz32(ops[0], ops[1]);
+        break;
       case OP.BIT_AND:
         this.emitBitOp('and', ops[0], ops[1], ops[2]);
         break;
@@ -711,6 +782,12 @@ class CodeGenerator {
       case OP.ARRAY_CONCAT:
         this.emitArrayConcat(ops[0], ops[1], ops[2]);
         break;
+      case OP.ARRAY_SPLICE:
+        this.emitArraySplice(ops[0], ops[1], ops[2], ops[3], ops[4]);
+        break;
+      case OP.ARRAY_FILL:
+        this.emitArrayFill(ops[0], ops[1], ops[2], ops[3], ops[4]);
+        break;
       // String methods
       case OP.STR_SLICE:
         this.emitStrSlice(ops[0], ops[1], ops[2], ops[3]);
@@ -732,6 +809,36 @@ class CodeGenerator {
         break;
       case OP.STR_ENDS_WITH:
         this.emitStrEndsWith(ops[0], ops[1], ops[2]);
+        break;
+      case OP.STR_CHAR_CODE_AT:
+        this.emitStrCharCodeAt(ops[0], ops[1], ops[2]);
+        break;
+      case OP.STR_FROM_CHAR_CODE:
+        this.emitStrFromCharCode(ops[0], ops[1]);
+        break;
+      case OP.STR_PAD_START:
+        this.emitStrPadStart(ops[0], ops[1], ops[2], ops[3]);
+        break;
+      case OP.STR_PAD_END:
+        this.emitStrPadEnd(ops[0], ops[1], ops[2], ops[3]);
+        break;
+      case OP.STR_TRIM_START:
+        this.emitStrTrimStart(ops[0], ops[1]);
+        break;
+      case OP.STR_TRIM_END:
+        this.emitStrTrimEnd(ops[0], ops[1]);
+        break;
+      case OP.STR_REPLACE_ALL:
+        this.emitStrReplaceAll(ops[0], ops[1], ops[2], ops[3]);
+        break;
+      case OP.NUM_IS_INTEGER:
+        this.emitNumIsInteger(ops[0], ops[1]);
+        break;
+      case OP.NUM_IS_FINITE:
+        this.emitNumIsFinite(ops[0], ops[1]);
+        break;
+      case OP.NUM_TO_FIXED:
+        this.emitNumToFixed(ops[0], ops[1], ops[2]);
         break;
       // Object methods
       case OP.OBJ_KEYS:

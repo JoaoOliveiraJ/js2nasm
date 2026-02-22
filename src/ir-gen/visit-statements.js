@@ -301,34 +301,82 @@ function visitAssignment(node) {
   }
 
   // Member assignment: arr[i] = val, obj.prop = val, obj["key"] = val
+  // Also handles compound: arr[i] += val, obj.prop -= val, etc.
   if (node.left.type === 'MemberExpression') {
     const { temp: objTemp } = this.visitExpression(node.left.object);
-    const { temp: valTemp } = this.visitExpression(node.right);
+    const { temp: rightTemp } = this.visitExpression(node.right);
+
+    // Determine the compound op (if any)
+    const compoundOpMap = {
+      '+=': OP.ADD, '-=': OP.SUB, '*=': OP.MUL, '/=': OP.DIV, '%=': OP.MOD,
+      '**=': OP.POW, '&=': OP.BIT_AND, '|=': OP.BIT_OR, '^=': OP.BIT_XOR,
+      '<<=': OP.SHL, '>>=': OP.SHR, '>>>=': OP.USHR,
+    };
+
+    // Helper: given old value + right, compute new value
+    const computeVal = (oldTemp) => {
+      if (node.operator === '=') return rightTemp;
+      const compOp = compoundOpMap[node.operator];
+      if (compOp) {
+        const result = this.newTemp();
+        this.emit(compOp, result, oldTemp, rightTemp);
+        return result;
+      }
+      throw new Error(`Unsupported compound assignment: ${node.operator}`);
+    };
 
     if (node.left.computed) {
       const prop = node.left.property;
-      // String key → object set
+      // String key → object get/set
       if (prop.type === 'Literal' && typeof prop.value === 'string') {
         const keyLabel = this.program.addString(prop.value);
+        if (node.operator !== '=') {
+          const oldTemp = this.newTemp();
+          this.emit(OP.OBJ_GET, oldTemp, objTemp, keyLabel);
+          const valTemp = computeVal(oldTemp);
+          this.emit(OP.OBJ_SET, objTemp, keyLabel, valTemp);
+          return { temp: valTemp, type: TYPE_INT };
+        }
+        this.emit(OP.OBJ_SET, objTemp, keyLabel, rightTemp);
+        return { temp: rightTemp, type: TYPE_INT };
+      }
+      // Numeric → array get/set
+      const { temp: idxTemp } = this.visitExpression(prop);
+      if (node.operator !== '=') {
+        const oldTemp = this.newTemp();
+        this.emit(OP.ARRAY_GET, oldTemp, objTemp, idxTemp);
+        const valTemp = computeVal(oldTemp);
+        this.emit(OP.ARRAY_SET, objTemp, idxTemp, valTemp);
+        return { temp: valTemp, type: TYPE_INT };
+      }
+      this.emit(OP.ARRAY_SET, objTemp, idxTemp, rightTemp);
+      return { temp: rightTemp, type: TYPE_INT };
+    }
+
+    // Non-computed: obj.prop
+    if (node.left.property.type === 'Identifier') {
+      const keyLabel = this.program.addString(node.left.property.name);
+      if (node.operator !== '=') {
+        const oldTemp = this.newTemp();
+        this.emit(OP.OBJ_GET, oldTemp, objTemp, keyLabel);
+        const valTemp = computeVal(oldTemp);
         this.emit(OP.OBJ_SET, objTemp, keyLabel, valTemp);
         return { temp: valTemp, type: TYPE_INT };
       }
-      // Numeric → array set
-      const { temp: idxTemp } = this.visitExpression(prop);
-      this.emit(OP.ARRAY_SET, objTemp, idxTemp, valTemp);
-      return { temp: valTemp, type: TYPE_INT };
-    }
-
-    // Non-computed: obj.prop = val
-    if (node.left.property.type === 'Identifier') {
-      const keyLabel = this.program.addString(node.left.property.name);
-      this.emit(OP.OBJ_SET, objTemp, keyLabel, valTemp);
-      return { temp: valTemp, type: TYPE_INT };
+      this.emit(OP.OBJ_SET, objTemp, keyLabel, rightTemp);
+      return { temp: rightTemp, type: TYPE_INT };
     }
 
     const { temp: idxTemp } = this.visitExpression(node.left.property);
-    this.emit(OP.ARRAY_SET, objTemp, idxTemp, valTemp);
-    return { temp: valTemp, type: TYPE_INT };
+    if (node.operator !== '=') {
+      const oldTemp = this.newTemp();
+      this.emit(OP.ARRAY_GET, oldTemp, objTemp, idxTemp);
+      const valTemp = computeVal(oldTemp);
+      this.emit(OP.ARRAY_SET, objTemp, idxTemp, valTemp);
+      return { temp: valTemp, type: TYPE_INT };
+    }
+    this.emit(OP.ARRAY_SET, objTemp, idxTemp, rightTemp);
+    return { temp: rightTemp, type: TYPE_INT };
   }
 
   throw new Error(`Unsupported assignment: ${node.operator} to ${node.left.type}`);

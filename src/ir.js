@@ -118,6 +118,37 @@ const OP = {
   MATH_FLOOR: 'MATH_FLOOR',     // dest, src (float → int)
   MATH_SQRT: 'MATH_SQRT',       // dest, src (float → float)
   MATH_POW: 'MATH_POW',         // dest, base, exp (int only for now)
+  MATH_ROUND: 'MATH_ROUND',     // dest, src
+  MATH_CEIL: 'MATH_CEIL',       // dest, src
+  MATH_TRUNC: 'MATH_TRUNC',     // dest, src
+  MATH_SIGN: 'MATH_SIGN',       // dest, src
+  MATH_RANDOM: 'MATH_RANDOM',   // dest
+  MATH_LOG: 'MATH_LOG',         // dest, src
+  MATH_LOG2: 'MATH_LOG2',       // dest, src
+  MATH_SIN: 'MATH_SIN',         // dest, src
+  MATH_COS: 'MATH_COS',         // dest, src
+  MATH_TAN: 'MATH_TAN',         // dest, src
+  MATH_ATAN2: 'MATH_ATAN2',     // dest, y, x
+  MATH_CLAMP32: 'MATH_CLAMP32', // dest, src (Math.clz32)
+
+  // String extra
+  STR_CHAR_CODE_AT: 'STR_CHAR_CODE_AT',       // dest, str, index
+  STR_FROM_CHAR_CODE: 'STR_FROM_CHAR_CODE',   // dest, code
+  STR_PAD_START: 'STR_PAD_START',             // dest, str, targetLen, padStr
+  STR_PAD_END: 'STR_PAD_END',                 // dest, str, targetLen, padStr
+  STR_TRIM_START: 'STR_TRIM_START',           // dest, str
+  STR_TRIM_END: 'STR_TRIM_END',               // dest, str
+  STR_REPLACE_ALL: 'STR_REPLACE_ALL',         // dest, str, search, replacement
+
+  // Number builtins
+  NUM_IS_INTEGER: 'NUM_IS_INTEGER', // dest, src
+  NUM_IS_FINITE: 'NUM_IS_FINITE',   // dest, src
+  NUM_TO_FIXED: 'NUM_TO_FIXED',     // dest, src, digits
+
+  // Array extra
+  ARRAY_SPLICE: 'ARRAY_SPLICE',   // dest, array, start, deleteCount, ...items
+  ARRAY_FILL: 'ARRAY_FILL',       // dest, array, value, start, end
+  ARRAY_FLAT: 'ARRAY_FLAT',       // dest, array
 
   // typeof
   TYPEOF: 'TYPEOF',             // dest, src, typeHint

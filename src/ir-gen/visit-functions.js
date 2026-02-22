@@ -446,6 +446,47 @@ function visitCallExpression(node) {
       this.emit(OP.ARRAY_CONCAT, t, arrTemp, arr2Temp);
       return { temp: t, type: TYPE_ARRAY };
     }
+    if (propName === 'splice' && this._isArrayLike(obj)) {
+      const { temp: arrTemp } = this.visitExpression(obj);
+      const { temp: startTemp } = this.visitExpression(node.arguments[0]);
+      let delCountTemp;
+      if (node.arguments.length > 1) {
+        delCountTemp = this.visitExpression(node.arguments[1]).temp;
+      } else {
+        // Default: delete everything from start
+        delCountTemp = this.newTemp();
+        this.emit(OP.ARRAY_LENGTH, delCountTemp, arrTemp);
+      }
+      // Collect items to insert
+      const items = [];
+      for (let i = 2; i < node.arguments.length; i++) {
+        const { temp, type } = this.visitExpression(node.arguments[i]);
+        items.push({ temp, type });
+      }
+      const t = this.newTemp();
+      this.emit(OP.ARRAY_SPLICE, t, arrTemp, startTemp, delCountTemp, items);
+      return { temp: t, type: TYPE_ARRAY };
+    }
+    if (propName === 'fill' && this._isArrayLike(obj)) {
+      const { temp: arrTemp } = this.visitExpression(obj);
+      const { temp: valTemp } = this.visitExpression(node.arguments[0]);
+      let startTemp, endTemp;
+      if (node.arguments.length > 1) {
+        startTemp = this.visitExpression(node.arguments[1]).temp;
+      } else {
+        startTemp = this.newTemp();
+        this.emit(OP.LOAD_INT, startTemp, 0);
+      }
+      if (node.arguments.length > 2) {
+        endTemp = this.visitExpression(node.arguments[2]).temp;
+      } else {
+        endTemp = this.newTemp();
+        this.emit(OP.ARRAY_LENGTH, endTemp, arrTemp);
+      }
+      const t = this.newTemp();
+      this.emit(OP.ARRAY_FILL, t, arrTemp, valTemp, startTemp, endTemp);
+      return { temp: t, type: TYPE_ARRAY };
+    }
 
     // Array higher-order methods (desugared into loops)
     if (propName === 'forEach' && this._isArrayLike(obj)) {
@@ -1023,6 +1064,42 @@ function visitCallExpression(node) {
       return { temp: t, type: TYPE_BOOL };
     }
 
+    // String static methods
+    if (obj.type === 'Identifier' && obj.name === 'String' && propName === 'fromCharCode') {
+      const { temp: codeTemp } = this.visitExpression(node.arguments[0]);
+      const t = this.newTemp();
+      this.emit(OP.STR_FROM_CHAR_CODE, t, codeTemp);
+      return { temp: t, type: TYPE_STRING };
+    }
+
+    // Number static methods
+    if (obj.type === 'Identifier' && obj.name === 'Number') {
+      if (propName === 'isInteger') {
+        const { temp: valTemp } = this.visitExpression(node.arguments[0]);
+        const t = this.newTemp();
+        this.emit(OP.NUM_IS_INTEGER, t, valTemp);
+        return { temp: t, type: TYPE_BOOL };
+      }
+      if (propName === 'isFinite') {
+        const { temp: valTemp } = this.visitExpression(node.arguments[0]);
+        const t = this.newTemp();
+        this.emit(OP.NUM_IS_FINITE, t, valTemp);
+        return { temp: t, type: TYPE_BOOL };
+      }
+      if (propName === 'parseInt') {
+        const { temp: argTemp } = this.visitExpression(node.arguments[0]);
+        const t = this.newTemp();
+        this.emit(OP.PARSE_INT, t, argTemp);
+        return { temp: t, type: TYPE_INT };
+      }
+      if (propName === 'parseFloat') {
+        const { temp: argTemp } = this.visitExpression(node.arguments[0]);
+        const t = this.newTemp();
+        this.emit(OP.PARSE_FLOAT, t, argTemp);
+        return { temp: t, type: TYPE_FLOAT };
+      }
+    }
+
     // String methods
     if (propName === 'charAt') {
       const { temp: strTemp } = this.visitExpression(obj);
@@ -1126,6 +1203,76 @@ function visitCallExpression(node) {
       const t = this.newTemp();
       this.emit(OP.STR_ENDS_WITH, t, strTemp, suffixTemp);
       return { temp: t, type: TYPE_BOOL };
+    }
+    if (propName === 'charCodeAt') {
+      const { temp: strTemp } = this.visitExpression(obj);
+      const { temp: idxTemp } = this.visitExpression(node.arguments[0]);
+      const t = this.newTemp();
+      this.emit(OP.STR_CHAR_CODE_AT, t, strTemp, idxTemp);
+      return { temp: t, type: TYPE_INT };
+    }
+    if (propName === 'padStart') {
+      const { temp: strTemp } = this.visitExpression(obj);
+      const { temp: lenTemp } = this.visitExpression(node.arguments[0]);
+      let padTemp;
+      if (node.arguments.length > 1) {
+        padTemp = this.visitExpression(node.arguments[1]).temp;
+      } else {
+        padTemp = this.newTemp();
+        const label = this.program.addString(' ');
+        this.emit(OP.LOAD_STRING, padTemp, label);
+      }
+      const t = this.newTemp();
+      this.emit(OP.STR_PAD_START, t, strTemp, lenTemp, padTemp);
+      return { temp: t, type: TYPE_STRING };
+    }
+    if (propName === 'padEnd') {
+      const { temp: strTemp } = this.visitExpression(obj);
+      const { temp: lenTemp } = this.visitExpression(node.arguments[0]);
+      let padTemp;
+      if (node.arguments.length > 1) {
+        padTemp = this.visitExpression(node.arguments[1]).temp;
+      } else {
+        padTemp = this.newTemp();
+        const label = this.program.addString(' ');
+        this.emit(OP.LOAD_STRING, padTemp, label);
+      }
+      const t = this.newTemp();
+      this.emit(OP.STR_PAD_END, t, strTemp, lenTemp, padTemp);
+      return { temp: t, type: TYPE_STRING };
+    }
+    if (propName === 'trimStart' || propName === 'trimLeft') {
+      const { temp: strTemp } = this.visitExpression(obj);
+      const t = this.newTemp();
+      this.emit(OP.STR_TRIM_START, t, strTemp);
+      return { temp: t, type: TYPE_STRING };
+    }
+    if (propName === 'trimEnd' || propName === 'trimRight') {
+      const { temp: strTemp } = this.visitExpression(obj);
+      const t = this.newTemp();
+      this.emit(OP.STR_TRIM_END, t, strTemp);
+      return { temp: t, type: TYPE_STRING };
+    }
+    if (propName === 'replaceAll') {
+      const { temp: strTemp } = this.visitExpression(obj);
+      const { temp: searchTemp } = this.visitExpression(node.arguments[0]);
+      const { temp: replTemp } = this.visitExpression(node.arguments[1]);
+      const t = this.newTemp();
+      this.emit(OP.STR_REPLACE_ALL, t, strTemp, searchTemp, replTemp);
+      return { temp: t, type: TYPE_STRING };
+    }
+    if (propName === 'toFixed') {
+      const { temp: valTemp } = this.visitExpression(obj);
+      let digitsTemp;
+      if (node.arguments.length > 0) {
+        digitsTemp = this.visitExpression(node.arguments[0]).temp;
+      } else {
+        digitsTemp = this.newTemp();
+        this.emit(OP.LOAD_INT, digitsTemp, 0);
+      }
+      const t = this.newTemp();
+      this.emit(OP.NUM_TO_FIXED, t, valTemp, digitsTemp);
+      return { temp: t, type: TYPE_STRING };
     }
     if (propName === 'toString') {
       const { temp: valTemp, type: valType } = this.visitExpression(obj);
@@ -1315,6 +1462,66 @@ function visitMathCall(method, argNodes) {
     const { temp: src } = this.visitExpression(argNodes[0]);
     this.emit(OP.MATH_SQRT, t, src);
     return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'round') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_ROUND, t, src);
+    return { temp: t, type: TYPE_INT };
+  }
+  if (method === 'ceil') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_CEIL, t, src);
+    return { temp: t, type: TYPE_INT };
+  }
+  if (method === 'trunc') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_TRUNC, t, src);
+    return { temp: t, type: TYPE_INT };
+  }
+  if (method === 'sign') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_SIGN, t, src);
+    return { temp: t, type: TYPE_INT };
+  }
+  if (method === 'random') {
+    this.emit(OP.MATH_RANDOM, t);
+    return { temp: t, type: TYPE_INT };
+  }
+  if (method === 'log') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_LOG, t, src);
+    return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'log2') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_LOG2, t, src);
+    return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'sin') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_SIN, t, src);
+    return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'cos') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_COS, t, src);
+    return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'tan') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_TAN, t, src);
+    return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'atan2') {
+    const { temp: y } = this.visitExpression(argNodes[0]);
+    const { temp: x } = this.visitExpression(argNodes[1]);
+    this.emit(OP.MATH_ATAN2, t, y, x);
+    return { temp: t, type: TYPE_FLOAT };
+  }
+  if (method === 'clz32') {
+    const { temp: src } = this.visitExpression(argNodes[0]);
+    this.emit(OP.MATH_CLAMP32, t, src);
+    return { temp: t, type: TYPE_INT };
   }
 
   throw new Error(`Unsupported Math method: Math.${method}`);

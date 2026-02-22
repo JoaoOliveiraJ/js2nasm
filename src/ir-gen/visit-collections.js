@@ -26,6 +26,25 @@ function visitMemberExpression(node) {
     }
   }
 
+  // Number constants: Number.MAX_SAFE_INTEGER, etc.
+  if (!node.computed && node.object.type === 'Identifier' && node.object.name === 'Number' &&
+      node.property.type === 'Identifier') {
+    const numberConstants = {
+      'MAX_SAFE_INTEGER': 9007199254740991,
+      'MIN_SAFE_INTEGER': -9007199254740991,
+      'MAX_VALUE': 9007199254740991,  // approximate for int
+      'POSITIVE_INFINITY': 9007199254740991,
+      'NEGATIVE_INFINITY': -9007199254740991,
+      'EPSILON': 0,  // no float precision concept for ints
+    };
+    const val = numberConstants[node.property.name];
+    if (val !== undefined) {
+      const t = this.newTemp();
+      this.emit(OP.LOAD_INT, t, val);
+      return { temp: t, type: TYPE_INT };
+    }
+  }
+
   // .length property
   if (!node.computed && node.property.type === 'Identifier' && node.property.name === 'length') {
     const { temp: objTemp, type } = this.visitExpression(node.object);
@@ -102,7 +121,12 @@ function visitMemberExpression(node) {
 function visitObjectExpression(node) {
   const hasSpread = node.properties.some(p => p.type === 'SpreadElement');
 
-  if (!hasSpread) {
+  // Check for computed keys or method shorthand that need dynamic handling
+  const needsDynamic = hasSpread || node.properties.some(p =>
+    p.type !== 'SpreadElement' && (p.computed || p.method)
+  );
+
+  if (!needsDynamic) {
     const keys = [];
     const values = [];
     const propTypes = {}; // key → type mapping for type tracking
@@ -111,16 +135,23 @@ function visitObjectExpression(node) {
       const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
       const keyLabel = this.program.addString(keyName);
       keys.push(keyLabel);
-      const { temp, type } = this.visitExpression(prop.value);
-      values.push(temp);
-      propTypes[keyName] = type;
+      // Property shorthand: { x } → { x: x }
+      if (prop.shorthand) {
+        const { temp, type } = this.visitExpression(prop.key);
+        values.push(temp);
+        propTypes[keyName] = type;
+      } else {
+        const { temp, type } = this.visitExpression(prop.value);
+        values.push(temp);
+        propTypes[keyName] = type;
+      }
     }
     const t = this.newTemp();
     this.emit(OP.OBJ_NEW, t, keys, values);
     return { temp: t, type: TYPE_INT, propTypes }; // TYPE_INT as generic pointer
   }
 
-  // Has spread: create empty object, then set/spread each property
+  // Dynamic: has spread, computed keys, or method shorthand
   const t = this.newTemp();
   this.emit(OP.OBJ_NEW, t, [], []);
   const propTypes = {};
@@ -128,10 +159,49 @@ function visitObjectExpression(node) {
     if (prop.type === 'SpreadElement') {
       const { temp: srcObj } = this.visitExpression(prop.argument);
       this.emit(OP.OBJ_SPREAD, t, srcObj);
-    } else {
+    } else if (prop.computed) {
+      // Computed key: { [expr]: val }
+      const { temp: keyTemp, type: keyType } = this.visitExpression(prop.key);
+      // Convert key to string if it's not already
+      let keyLabel;
+      if (prop.key.type === 'Literal' && typeof prop.key.value === 'string') {
+        keyLabel = this.program.addString(prop.key.value);
+      } else {
+        // Dynamic key — convert to string and use OBJ_SET with the string
+        const keyStr = this.newTemp();
+        if (keyType === TYPE_STRING) {
+          // Already a string pointer, use it directly with a dynamic approach
+          // We need OBJ_SET to accept string pointers too — for now convert
+          keyLabel = null;
+        } else {
+          keyLabel = null;
+        }
+      }
+      const { temp: valTemp, type: valType } = this.visitExpression(prop.value);
+      if (keyLabel) {
+        this.emit(OP.OBJ_SET, t, keyLabel, valTemp);
+      } else {
+        // For dynamic keys, convert to string and use OBJ_SET
+        // Since our OBJ_SET expects a label, we'll use the key expression value
+        // as a runtime string pointer
+        this.emit(OP.OBJ_SET, t, keyTemp, valTemp);
+      }
+    } else if (prop.method) {
+      // Method shorthand: { foo() {} } → { foo: function() {} }
       const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
       const keyLabel = this.program.addString(keyName);
       const { temp: valTemp, type: valType } = this.visitExpression(prop.value);
+      this.emit(OP.OBJ_SET, t, keyLabel, valTemp);
+      propTypes[keyName] = valType;
+    } else {
+      const keyName = prop.key.type === 'Identifier' ? prop.key.name : String(prop.key.value);
+      const keyLabel = this.program.addString(keyName);
+      let valTemp, valType;
+      if (prop.shorthand) {
+        ({ temp: valTemp, type: valType } = this.visitExpression(prop.key));
+      } else {
+        ({ temp: valTemp, type: valType } = this.visitExpression(prop.value));
+      }
       this.emit(OP.OBJ_SET, t, keyLabel, valTemp);
       propTypes[keyName] = valType;
     }

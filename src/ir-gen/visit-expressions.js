@@ -79,6 +79,21 @@ function visitLiteral(node) {
 
 function visitIdentifier(node) {
   const t = this.newTemp();
+
+  // Global constants
+  if (node.name === 'undefined') {
+    this.emit(OP.LOAD_UNDEFINED, t);
+    return { temp: t, type: TYPE_INT };
+  }
+  if (node.name === 'Infinity') {
+    this.emit(OP.LOAD_INT, t, 9007199254740991); // MAX_SAFE_INTEGER as approximation
+    return { temp: t, type: TYPE_INT };
+  }
+  if (node.name === 'NaN') {
+    this.emit(OP.LOAD_INT, t, 0); // NaN approximated as 0
+    return { temp: t, type: TYPE_INT };
+  }
+
   const info = this.analyzer.currentScope.lookup(node.name);
 
   // Resolve the variable name: importMap → qualified global → raw name

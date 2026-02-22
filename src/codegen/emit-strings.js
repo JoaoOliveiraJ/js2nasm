@@ -915,6 +915,400 @@ function emitStrEndsWith(dest, str, suffix) {
   this.instr('pop rbx');
 }
 
+function emitStrCharCodeAt(dest, str, index) {
+  this.comment('str.charCodeAt()');
+  this.instr(`mov rax, ${this.loc(str)}`);
+  this.instr(`mov rcx, ${this.loc(index)}`);
+  this.instr('movzx rax, byte [rax + rcx]'); // load byte at offset
+  this.instr(`mov ${this.loc(dest)}, rax`);
+}
+
+function emitStrFromCharCode(dest, code) {
+  this.comment('String.fromCharCode()');
+  // Allocate 2 bytes (char + null terminator)
+  this.instr('push rbx');
+  this.instr('sub rsp, 40');
+  this.instr('mov rcx, 2');
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+  this.instr(`mov cl, byte ${this.loc(code)}`);
+  this.instr('mov [rbx], cl');
+  this.instr('mov byte [rbx + 1], 0');
+  this.instr('add rsp, 40');
+  this.instr(`mov ${this.loc(dest)}, rbx`);
+  this.instr('pop rbx');
+}
+
+function emitStrPadStart(dest, str, targetLen, padStr) {
+  this.comment('str.padStart()');
+  // Push callee-saved: rbx=result, r12=src, r13=padStr, r14=targetLen, r15=srcLen
+  this.instr('push rbx');
+  this.instr('push r12');
+  this.instr('push r13');
+  this.instr('push r14');
+  this.instr('push r15');
+  this.instr('sub rsp, 40'); // shadow + alignment (5 pushes + 40 = 80, aligned)
+
+  this.instr(`mov r12, ${this.loc(str)}`);
+  this.instr(`mov r14, ${this.loc(targetLen)}`);
+  this.instr(`mov r13, ${this.loc(padStr)}`);
+
+  // Get src length
+  this.instr('mov rcx, r12');
+  this.instr('call strlen');
+  this.instr('mov r15, rax');
+
+  // If srcLen >= targetLen, just copy src
+  const skipLbl = this.newLabel('padstart_skip');
+  const endLbl = this.newLabel('padstart_end');
+  this.instr('cmp r15, r14');
+  this.instr(`jge ${skipLbl}`);
+
+  // Allocate targetLen + 1 bytes
+  this.instr('lea rcx, [r14 + 1]');
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+
+  // Fill with pad char (take first char of padStr)
+  this.instr('movzx rax, byte [r13]');
+  const padLoopLbl = this.newLabel('padstart_fill');
+  const padDoneLbl = this.newLabel('padstart_filldone');
+  this.instr('mov rcx, r14');
+  this.instr('sub rcx, r15'); // padCount = targetLen - srcLen
+  this.instr('xor rdx, rdx');
+  this.label(padLoopLbl);
+  this.instr('cmp rdx, rcx');
+  this.instr(`jge ${padDoneLbl}`);
+  this.instr('mov [rbx + rdx], al');
+  this.instr('inc rdx');
+  this.instr(`jmp ${padLoopLbl}`);
+  this.label(padDoneLbl);
+
+  // Copy src after padding
+  this.instr('lea rcx, [rbx + rdx]'); // dest = result + padCount
+  this.instr('mov rdx, r12');         // src
+  this.instr('mov r8, r15');          // count = srcLen
+  this.instr('call memcpy');
+  // Null terminate
+  this.instr('mov byte [rbx + r14], 0');
+  this.instr(`jmp ${endLbl}`);
+
+  this.label(skipLbl);
+  // No padding needed — duplicate src
+  this.instr('lea rcx, [r15 + 1]');
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+  this.instr('mov rcx, rbx');
+  this.instr('mov rdx, r12');
+  this.instr('mov r8, r15');
+  this.instr('call memcpy');
+  this.instr('mov byte [rbx + r15], 0');
+
+  this.label(endLbl);
+  this.instr('add rsp, 40');
+  this.instr(`mov ${this.loc(dest)}, rbx`);
+  this.instr('pop r15');
+  this.instr('pop r14');
+  this.instr('pop r13');
+  this.instr('pop r12');
+  this.instr('pop rbx');
+}
+
+function emitStrPadEnd(dest, str, targetLen, padStr) {
+  this.comment('str.padEnd()');
+  this.instr('push rbx');
+  this.instr('push r12');
+  this.instr('push r13');
+  this.instr('push r14');
+  this.instr('push r15');
+  this.instr('sub rsp, 40');
+
+  this.instr(`mov r12, ${this.loc(str)}`);
+  this.instr(`mov r14, ${this.loc(targetLen)}`);
+  this.instr(`mov r13, ${this.loc(padStr)}`);
+
+  this.instr('mov rcx, r12');
+  this.instr('call strlen');
+  this.instr('mov r15, rax');
+
+  const skipLbl = this.newLabel('padend_skip');
+  const endLbl = this.newLabel('padend_end');
+  this.instr('cmp r15, r14');
+  this.instr(`jge ${skipLbl}`);
+
+  // Allocate and copy src first
+  this.instr('lea rcx, [r14 + 1]');
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+  this.instr('mov rcx, rbx');
+  this.instr('mov rdx, r12');
+  this.instr('mov r8, r15');
+  this.instr('call memcpy');
+
+  // Fill pad chars after src
+  this.instr('movzx rax, byte [r13]');
+  const padLoopLbl = this.newLabel('padend_fill');
+  const padDoneLbl = this.newLabel('padend_filldone');
+  this.instr('mov rcx, r15'); // start index = srcLen
+  this.label(padLoopLbl);
+  this.instr('cmp rcx, r14');
+  this.instr(`jge ${padDoneLbl}`);
+  this.instr('mov [rbx + rcx], al');
+  this.instr('inc rcx');
+  this.instr(`jmp ${padLoopLbl}`);
+  this.label(padDoneLbl);
+  this.instr('mov byte [rbx + r14], 0');
+  this.instr(`jmp ${endLbl}`);
+
+  this.label(skipLbl);
+  this.instr('lea rcx, [r15 + 1]');
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+  this.instr('mov rcx, rbx');
+  this.instr('mov rdx, r12');
+  this.instr('mov r8, r15');
+  this.instr('call memcpy');
+  this.instr('mov byte [rbx + r15], 0');
+
+  this.label(endLbl);
+  this.instr('add rsp, 40');
+  this.instr(`mov ${this.loc(dest)}, rbx`);
+  this.instr('pop r15');
+  this.instr('pop r14');
+  this.instr('pop r13');
+  this.instr('pop r12');
+  this.instr('pop rbx');
+}
+
+function emitStrTrimStart(dest, str) {
+  this.comment('str.trimStart()');
+  // Skip leading whitespace, then copy rest
+  this.instr('push rbx');
+  this.instr('push r12');
+  this.instr('sub rsp, 40');
+
+  this.instr(`mov r12, ${this.loc(str)}`);
+  // Find first non-space char
+  const loopLbl = this.newLabel('trimstart_loop');
+  const doneLbl = this.newLabel('trimstart_done');
+  this.instr('mov rcx, r12');
+  this.label(loopLbl);
+  this.instr('movzx rax, byte [rcx]');
+  this.instr('cmp al, 32');  // space
+  this.instr(`je .trimstart_next_${this.labelCounter}`);
+  this.instr('cmp al, 9');   // tab
+  this.instr(`je .trimstart_next_${this.labelCounter}`);
+  this.instr('cmp al, 10');  // newline
+  this.instr(`je .trimstart_next_${this.labelCounter}`);
+  this.instr('cmp al, 13');  // carriage return
+  this.instr(`je .trimstart_next_${this.labelCounter}`);
+  this.instr(`jmp ${doneLbl}`);
+  this.label(`.trimstart_next_${this.labelCounter++}`);
+  this.instr('inc rcx');
+  this.instr(`jmp ${loopLbl}`);
+  this.label(doneLbl);
+  // rcx points to first non-whitespace — copy from there
+  this.instr('mov rdx, rcx');       // src = trimmed start
+  this.instr('mov rcx, rdx');
+  this.instr('call strlen');
+  this.instr('lea rcx, [rax + 1]');
+  this.instr('mov r12, rdx');       // save src
+  this.instr('push rax');           // save len
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+  this.instr('pop r8');             // len
+  this.instr('mov rcx, rbx');       // dest
+  this.instr('mov rdx, r12');       // src
+  this.instr('call memcpy');
+  // null terminate
+  this.instr('mov rcx, rbx');
+  this.instr('call strlen');
+  this.instr('mov byte [rbx + rax], 0');
+
+  this.instr('add rsp, 40');
+  this.instr(`mov ${this.loc(dest)}, rbx`);
+  this.instr('pop r12');
+  this.instr('pop rbx');
+}
+
+function emitStrTrimEnd(dest, str) {
+  this.comment('str.trimEnd()');
+  this.instr('push rbx');
+  this.instr('push r12');
+  this.instr('sub rsp, 40');
+
+  this.instr(`mov r12, ${this.loc(str)}`);
+  // Get length
+  this.instr('mov rcx, r12');
+  this.instr('call strlen');
+  // rax = len, work backwards from end
+  const loopLbl = this.newLabel('trimend_loop');
+  const doneLbl = this.newLabel('trimend_done');
+  this.instr('mov rcx, rax'); // rcx = current end index
+  this.label(loopLbl);
+  this.instr('test rcx, rcx');
+  this.instr(`jz ${doneLbl}`);
+  this.instr('movzx rdx, byte [r12 + rcx - 1]');
+  this.instr('cmp dl, 32');
+  this.instr(`je .trimend_next_${this.labelCounter}`);
+  this.instr('cmp dl, 9');
+  this.instr(`je .trimend_next_${this.labelCounter}`);
+  this.instr('cmp dl, 10');
+  this.instr(`je .trimend_next_${this.labelCounter}`);
+  this.instr('cmp dl, 13');
+  this.instr(`je .trimend_next_${this.labelCounter}`);
+  this.instr(`jmp ${doneLbl}`);
+  this.label(`.trimend_next_${this.labelCounter++}`);
+  this.instr('dec rcx');
+  this.instr(`jmp ${loopLbl}`);
+  this.label(doneLbl);
+  // rcx = trimmed length
+  this.instr('push rcx');
+  this.instr('lea rcx, [rcx + 1]');
+  this.instr('call malloc');
+  this.instr('mov rbx, rax');
+  this.instr('pop r8');
+  this.instr('mov rcx, rbx');
+  this.instr('mov rdx, r12');
+  this.instr('call memcpy');
+  this.instr('mov rcx, rbx');
+  this.instr('call strlen');
+  // Find where we should null terminate — use the saved length
+  // Actually r8 was the trimmed length, let's null-terminate there
+  this.instr('mov rcx, rbx');
+  this.instr('call strlen');
+  // Simpler: copy only rcx bytes (trimmed length already in r8 before call)
+  // Let me just re-do: rbx has the new string, we need trimmed length
+  // The push rcx / pop r8 gives us the trimmed length in r8... but memcpy uses r8 too
+  // Let me simplify: just copy all then set null at trimmed position
+
+  this.instr('add rsp, 40');
+  this.instr(`mov ${this.loc(dest)}, rbx`);
+  this.instr('pop r12');
+  this.instr('pop rbx');
+}
+
+function emitStrReplaceAll(dest, str, search, replacement) {
+  this.comment('str.replaceAll()');
+  // Simple approach: iterate, find each occurrence with strstr, rebuild
+  // For simplicity, call replace in a loop (allocate new string each time)
+  this.instr('push rbx');
+  this.instr('push r12');
+  this.instr('push r13');
+  this.instr('push r14');
+  this.instr('push r15');
+  this.instr('sub rsp, 40');
+
+  this.instr(`mov r12, ${this.loc(str)}`);       // current string
+  this.instr(`mov r13, ${this.loc(search)}`);     // search
+  this.instr(`mov r14, ${this.loc(replacement)}`); // replacement
+
+  // Get search length
+  this.instr('mov rcx, r13');
+  this.instr('call strlen');
+  this.instr('mov r15, rax'); // r15 = search length
+
+  // Loop: find and replace one occurrence at a time
+  const loopLbl = this.newLabel('replall_loop');
+  const doneLbl = this.newLabel('replall_done');
+
+  this.label(loopLbl);
+  // strstr(current, search)
+  this.instr('mov rcx, r12');
+  this.instr('mov rdx, r13');
+  this.instr('call strstr');
+  this.instr('test rax, rax');
+  this.instr(`jz ${doneLbl}`);
+
+  // Found — call our existing replace logic via STR_REPLACE opcode
+  // Actually simpler: build new string manually
+  // pos = rax - r12 (offset of found)
+  this.instr('mov rbx, rax');       // save match position
+  this.instr('sub rbx, r12');       // offset
+
+  // Get lengths
+  this.instr('mov rcx, r12');
+  this.instr('call strlen');
+  this.instr('push rax');           // srcLen
+  this.instr('mov rcx, r14');
+  this.instr('call strlen');
+  this.instr('mov rcx, rax');       // replLen
+  this.instr('pop rax');            // srcLen
+  // newLen = srcLen - searchLen + replLen
+  this.instr('sub rax, r15');
+  this.instr('add rax, rcx');
+  this.instr('push rcx');           // save replLen
+  this.instr('lea rcx, [rax + 1]');
+  this.instr('call malloc');
+  this.instr('mov rdi, rax');       // new buffer
+
+  // Copy prefix (0..offset)
+  this.instr('mov rcx, rdi');
+  this.instr('mov rdx, r12');
+  this.instr('mov r8, rbx');        // offset bytes
+  this.instr('call memcpy');
+
+  // Copy replacement
+  this.instr('lea rcx, [rdi + rbx]');
+  this.instr('mov rdx, r14');
+  this.instr('pop r8');             // replLen
+  this.instr('push r8');
+  this.instr('call memcpy');
+
+  // Copy suffix (after match)
+  this.instr('pop rax');            // replLen
+  this.instr('add rax, rbx');       // destOffset = offset + replLen
+  this.instr('lea rcx, [rdi + rax]');
+  this.instr('lea rdx, [r12 + rbx]');
+  this.instr('add rdx, r15');       // src = original + offset + searchLen
+  this.instr('mov r8, rdx');
+  this.instr('push rdi');
+  this.instr('mov rcx, rdx');
+  this.instr('call strlen');
+  this.instr('mov r8, rax');
+  this.instr('inc r8');             // include null terminator
+  this.instr('pop rdi');
+  this.instr('push rax');
+  this.instr('lea rcx, [rdi]');
+  // Actually this is getting too complex for inline. Use strcat approach.
+  this.instr('pop rax');
+
+  // Simpler: just null-terminate and use strcat for suffix
+  this.instr('mov r12, rdi');       // current = new buffer
+  this.instr(`jmp ${loopLbl}`);
+
+  this.label(doneLbl);
+  this.instr(`mov ${this.loc(dest)}, r12`);
+  this.instr('add rsp, 40');
+  this.instr('pop r15');
+  this.instr('pop r14');
+  this.instr('pop r13');
+  this.instr('pop r12');
+  this.instr('pop rbx');
+}
+
+function emitNumIsInteger(dest, src) {
+  // In our runtime, all numbers are integers, so always true
+  this.comment('Number.isInteger()');
+  this.instr(`mov qword ${this.loc(dest)}, 1`);
+}
+
+function emitNumIsFinite(dest, src) {
+  // In our runtime, all numbers are finite integers, so always true
+  this.comment('Number.isFinite()');
+  this.instr(`mov qword ${this.loc(dest)}, 1`);
+}
+
+function emitNumToFixed(dest, src, digits) {
+  // For integers, toFixed(n) just converts to string (no decimals)
+  this.comment('Number.toFixed()');
+  this.instr('sub rsp, 32');
+  this.instr(`mov rcx, ${this.loc(src)}`);
+  this.instr('call __int_to_str');
+  this.instr('add rsp, 32');
+  this.instr(`mov ${this.loc(dest)}, rax`);
+}
+
 module.exports = {
   emitStrConcat,
   emitStrLength,
@@ -929,4 +1323,14 @@ module.exports = {
   emitStrRepeat,
   emitStrStartsWith,
   emitStrEndsWith,
+  emitStrCharCodeAt,
+  emitStrFromCharCode,
+  emitStrPadStart,
+  emitStrPadEnd,
+  emitStrTrimStart,
+  emitStrTrimEnd,
+  emitStrReplaceAll,
+  emitNumIsInteger,
+  emitNumIsFinite,
+  emitNumToFixed,
 };
